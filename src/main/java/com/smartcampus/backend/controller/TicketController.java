@@ -34,4 +34,12 @@ public class TicketController {
     public Ticket getTicketById(@PathVariable String id) {
         return ticketService.getTicketById(id);
     }
+
+    @PutMapping("/{id}/status")
+    public Ticket updateStatus(
+            @PathVariable String id,
+            @RequestParam Ticket.Status status) {
+
+        return ticketService.updateStatus(id, status);
+    }
 }
