@@ -1,10 +1,13 @@
 package com.smartcampus.backend.service;
 
+import com.smartcampus.backend.model.Comment;
 import com.smartcampus.backend.model.Ticket;
 import com.smartcampus.backend.repository.TicketRepository;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 import static com.smartcampus.backend.model.Ticket.Status.*;
 
@@ -65,6 +68,81 @@ public class TicketService {
             default:
                 return false;
         }
+    }
+
+    public Ticket addComment(String ticketId, Comment comment) {
+
+        Ticket ticket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> new RuntimeException("Ticket not found"));
+
+        // Ownership validation
+        if (!comment.getUser().equals(ticket.getCreatedBy()) &&
+                (ticket.getAssignedTo() == null || !comment.getUser().equals(ticket.getAssignedTo()))) {
+
+            throw new RuntimeException("User not authorized to comment on this ticket");
+        }
+
+        comment.setId(UUID.randomUUID().toString());
+        // Set timestamp
+        comment.setCreatedAt(LocalDateTime.now());
+
+        // Initialize list if null
+        if (ticket.getComments() == null) {
+            ticket.setComments(new java.util.ArrayList<>());
+        }
+
+        ticket.getComments().add(comment);
+
+        return ticketRepository.save(ticket);
+    }
+    public Ticket updateComment(String ticketId, String commentId, Comment updatedComment) {
+
+        Ticket ticket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> new RuntimeException("Ticket not found"));
+
+        for (Comment comment : ticket.getComments()) {
+
+            if (comment.getId().equals(commentId)) {
+
+                // Ownership check
+                if (!comment.getUser().equals(updatedComment.getUser())) {
+                    throw new RuntimeException("You can only edit your own comment");
+                }
+
+                comment.setMessage(updatedComment.getMessage());
+                return ticketRepository.save(ticket);
+            }
+        }
+
+        throw new RuntimeException("Comment not found");
+    }
+
+    public Ticket deleteComment(String ticketId, String commentId, String user) {
+
+        Ticket ticket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> new RuntimeException("Ticket not found"));
+
+        Comment targetComment = null;
+
+        for (Comment comment : ticket.getComments()) {
+            if (comment.getId().equals(commentId)) {
+                targetComment = comment;
+                break;
+            }
+        }
+
+        if (targetComment == null) {
+            throw new RuntimeException("Comment not found");
+        }
+
+        // Ownership check
+        if (!targetComment.getUser().equals(user)) {
+            throw new RuntimeException("You can only delete your own comment");
+        }
+
+        ticket.getComments().remove(targetComment);
+
+        return ticketRepository.save(ticket);
     }
 
 }
