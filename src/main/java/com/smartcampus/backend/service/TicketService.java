@@ -6,8 +6,12 @@ import com.smartcampus.backend.repository.TicketRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.web.multipart.MultipartFile;
+import java.io.File;
+import java.io.IOException;
 
 import static com.smartcampus.backend.model.Ticket.Status.*;
 
@@ -143,6 +147,81 @@ public class TicketService {
         ticket.getComments().remove(targetComment);
 
         return ticketRepository.save(ticket);
+    }
+    public Ticket uploadImages(String ticketId, List<MultipartFile> files, String user) throws IOException {
+
+        Ticket ticket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> new RuntimeException("Ticket not found"));
+
+        // Authorization
+        if (!user.equals(ticket.getCreatedBy()) &&
+                (ticket.getAssignedTo() == null || !user.equals(ticket.getAssignedTo()))) {
+            throw new RuntimeException("Not authorized to upload images");
+        }
+
+        // Initialize list
+        if (ticket.getAttachments() == null) {
+            ticket.setAttachments(new java.util.ArrayList<>());
+        }
+
+        // Limit check
+        if (ticket.getAttachments().size() + files.size() > 3) {
+            throw new RuntimeException("Maximum 3 images allowed per ticket");
+        }
+
+        String uploadDir = System.getProperty("user.dir") + "/uploads/";
+
+        File dir = new File(uploadDir);
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+
+        List<String> fileNames = new ArrayList<>();
+
+        for (MultipartFile file : files) {
+
+            String fileName = UUID.randomUUID() + "_" + file.getOriginalFilename();
+            File destination = new File(uploadDir + fileName);
+
+            file.transferTo(destination);
+
+            ticket.getAttachments().add(fileName);
+        }
+
+        return ticketRepository.save(ticket);
+    }
+    public Ticket assignTechnician(String ticketId, String technician, String admin) {
+
+        Ticket ticket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> new RuntimeException("Ticket not found"));
+
+        //Only admin can assign
+        if (!admin.equals("admin")) {
+            throw new RuntimeException("Only admin can assign technician");
+        }
+
+        //Cannot assign closed ticket
+        if ("CLOSED".equals(ticket.getStatus())) {
+            throw new RuntimeException("Cannot assign technician to closed ticket");
+        }
+
+        //Assign technician
+        ticket.setAssignedTo(technician);
+
+        //Update status automatically
+        ticket.setStatus(Ticket.Status.valueOf("IN_PROGRESS"));
+
+        return ticketRepository.save(ticket);
+    }
+    public List<Ticket> getTicketsByTechnician(String technician) {
+
+        List<Ticket> tickets = ticketRepository.findByAssignedTo(technician);
+
+        if (tickets.isEmpty()) {
+            throw new RuntimeException("No tickets assigned to this technician");
+        }
+
+        return tickets;
     }
 
 }

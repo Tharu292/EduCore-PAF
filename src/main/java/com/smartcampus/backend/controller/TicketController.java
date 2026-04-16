@@ -3,9 +3,12 @@ package com.smartcampus.backend.controller;
 import com.smartcampus.backend.model.Comment;
 import com.smartcampus.backend.model.Ticket;
 import com.smartcampus.backend.service.TicketService;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import org.springframework.web.multipart.MultipartFile;
+import java.io.IOException;
 
 @RestController
 @RequestMapping("/api/tickets")
@@ -68,5 +71,27 @@ public class TicketController {
             @RequestParam String user) {
 
         return ticketService.deleteComment(ticketId, commentId, user);
+    }
+    @PostMapping("/{id}/upload")
+    public Ticket uploadImages(
+            @PathVariable String id,
+            @RequestParam("files") List<MultipartFile> files,
+            @RequestParam String user) throws IOException {
+
+        return ticketService.uploadImages(id, files, user);
+    }
+
+    @PutMapping("/{id}/assign")
+    public ResponseEntity<Ticket> assignTechnician(
+            @PathVariable String id,
+            @RequestParam String technician,
+            @RequestParam String admin
+    ) {
+        return ResponseEntity.ok(ticketService.assignTechnician(id, technician, admin));
+    }
+
+    @GetMapping("/technician/{name}")
+    public ResponseEntity<List<Ticket>> getTicketsByTechnician(@PathVariable String name) {
+        return ResponseEntity.ok(ticketService.getTicketsByTechnician(name));
     }
 }
