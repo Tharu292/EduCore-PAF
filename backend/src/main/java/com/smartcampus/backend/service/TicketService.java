@@ -30,6 +30,9 @@ public class TicketService {
         return ticketRepository.save(ticket);
     }
 
+    public List<Ticket> getTicketsByUser(String username) {
+        return ticketRepository.findByCreatedBy(username);
+    }
     public List<Ticket> getAllTickets() {
         return ticketRepository.findAll();
     }
