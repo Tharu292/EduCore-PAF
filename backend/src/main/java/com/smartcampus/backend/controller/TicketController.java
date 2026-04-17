@@ -12,7 +12,7 @@ import java.io.IOException;
 
 @RestController
 @RequestMapping("/api/tickets")
-@CrossOrigin
+@CrossOrigin(origins = "http://localhost:5173")
 public class TicketController {
 
     private final TicketService ticketService;
@@ -93,5 +93,10 @@ public class TicketController {
     @GetMapping("/technician/{name}")
     public ResponseEntity<List<Ticket>> getTicketsByTechnician(@PathVariable String name) {
         return ResponseEntity.ok(ticketService.getTicketsByTechnician(name));
+    }
+
+    @GetMapping("/user/{username}")
+    public ResponseEntity<List<Ticket>> getTicketsByUser(@PathVariable String username) {
+        return ResponseEntity.ok(ticketService.getTicketsByUser(username));
     }
 }
