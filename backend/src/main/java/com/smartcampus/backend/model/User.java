@@ -1,5 +1,7 @@
 package com.smartcampus.backend.model;
 
+import java.util.ArrayList;
+
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.data.annotation.Id;
@@ -24,7 +26,7 @@ public class User {
         this.clerkUserId = clerkUserId;
         this.email = email;
         this.name = name;
-        this.roles = List.of("USER");
+        this.roles = new ArrayList<>(List.of("USER"));
     }
 
 }
