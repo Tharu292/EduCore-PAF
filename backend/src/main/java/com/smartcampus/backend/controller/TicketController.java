@@ -99,4 +99,13 @@ public class TicketController {
     public ResponseEntity<List<Ticket>> getTicketsByUser(@PathVariable String username) {
         return ResponseEntity.ok(ticketService.getTicketsByUser(username));
     }
+
+    @DeleteMapping("/{id}/attachments/{filename}")
+    public Ticket removeAttachment(
+            @PathVariable String id,
+            @PathVariable String filename,
+            @RequestParam String user) {
+
+        return ticketService.removeAttachment(id, filename, user);
+    }
 }
