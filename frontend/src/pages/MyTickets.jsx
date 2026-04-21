@@ -1,27 +1,99 @@
 import { useEffect, useState } from "react";
-import API from "../api/axios";
+import { RefreshCw, Plus } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import TicketCard from "../components/TicketCard";
+import { getMyTickets } from "../services/ticketService";
 
-function MyTickets() {
+export default function MyTickets() {
   const [tickets, setTickets] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const navigate = useNavigate();
+
+  const loadTickets = async () => {
+    setLoading(true);
+    try {
+      const res = await getMyTickets("user1"); // Change "user1" to dynamic user later
+      setTickets(res.data || []);
+    } catch (err) {
+      console.error("Failed to load my tickets:", err);
+      alert("Failed to load tickets");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    API.get("/tickets/user/user1")
-      .then((res) => setTickets(res.data))
-      .catch(console.log);
+    loadTickets();
   }, []);
 
-  return (
-    <div>
-      <h2>My Tickets</h2>
+  const filteredTickets = tickets.filter((ticket) =>
+    ticket.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    ticket.status.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-      {tickets.map((t) => (
-        <div key={t.id}>
-          <h4>{t.title}</h4>
-          <p>{t.status}</p>
+  return (
+    <div className="max-w-7xl mx-auto">
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-3xl font-semibold text-gray-900">My Tickets</h1>
+          <p className="text-gray-600 mt-1">Track all your reported incidents and maintenance requests</p>
         </div>
-      ))}
+
+        <div className="flex items-center gap-4">
+          <button
+            onClick={loadTickets}
+            disabled={loading}
+            className="flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-300 rounded-2xl hover:bg-gray-50 transition disabled:opacity-70"
+          >
+            <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
+            Refresh
+          </button>
+
+          <button
+            onClick={() => navigate("/create")}
+            className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-2xl hover:bg-blue-700 transition"
+          >
+            <Plus size={20} />
+            New Ticket
+          </button>
+        </div>
+      </div>
+
+      {/* Search */}
+      <div className="mb-8">
+        <input
+          type="text"
+          placeholder="Search by title or status..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full max-w-md px-5 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:border-blue-500"
+        />
+      </div>
+
+      {loading ? (
+        <div className="text-center py-20 text-gray-500">Loading your tickets...</div>
+      ) : filteredTickets.length === 0 ? (
+        <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-gray-300">
+          <p className="text-gray-500">No tickets found</p>
+          <button
+            onClick={() => navigate("/create")}
+            className="mt-4 text-blue-600 hover:underline"
+          >
+            Create your first ticket →
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {filteredTickets.map((ticket) => (
+            <TicketCard
+              key={ticket.id}
+              ticket={ticket}
+              onClick={() => navigate(`/ticket/${ticket.id}`)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
-
-export default MyTickets;

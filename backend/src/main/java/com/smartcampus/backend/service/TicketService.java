@@ -227,5 +227,32 @@ public class TicketService {
         return tickets;
     }
 
+    public Ticket removeAttachment(String ticketId, String filename, String user) {
+        Ticket ticket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> new RuntimeException("Ticket not found"));
+
+        // Authorization: only creator or assigned technician can remove
+        if (!user.equals(ticket.getCreatedBy()) &&
+                (ticket.getAssignedTo() == null || !user.equals(ticket.getAssignedTo()))) {
+            throw new RuntimeException("Not authorized to remove attachment");
+        }
+
+        if (ticket.getAttachments() == null || !ticket.getAttachments().contains(filename)) {
+            throw new RuntimeException("Attachment not found");
+        }
+
+        // Delete physical file
+        String uploadDir = System.getProperty("user.dir") + "/uploads/";
+        File fileToDelete = new File(uploadDir + filename);
+        if (fileToDelete.exists()) {
+            fileToDelete.delete();
+        }
+
+        // Remove from list
+        ticket.getAttachments().remove(filename);
+
+        return ticketRepository.save(ticket);
+    }
+
 }
 
