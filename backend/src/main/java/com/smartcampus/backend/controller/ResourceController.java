@@ -8,8 +8,8 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/resources")
-@CrossOrigin
+@RequestMapping("/api/resources/")
+@CrossOrigin(origins = "http://localhost:5173")
 public class ResourceController {
 
     private final ResourceService service;
