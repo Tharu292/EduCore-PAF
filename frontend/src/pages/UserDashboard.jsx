@@ -1,12 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
-import { BookOpenCheck, CalendarClock, Mail, User, XCircle } from "lucide-react";
-import { cancelBooking, getStudentBookings } from "../api/bookingApi";
+import { BookOpenCheck, CalendarClock, Mail, RotateCcw, User, X, XCircle } from "lucide-react";
+import { cancelBooking, getStudentBookings, rescheduleBooking } from "../api/bookingApi";
 
 function UserDashboard() {
   const currentUser = JSON.parse(localStorage.getItem("smartCampusUser") || "{}");
   const [bookings, setBookings] = useState([]);
+  const [rescheduleTarget, setRescheduleTarget] = useState(null);
+  const [rescheduleForm, setRescheduleForm] = useState({
+    bookingDate: "",
+    startTime: "09:00",
+    endTime: "10:00",
+    expectedAttendees: 1,
+  });
 
   const fetchBookings = useCallback(async () => {
     if (!currentUser?.id) return;
@@ -29,6 +36,36 @@ function UserDashboard() {
       fetchBookings();
     } catch (error) {
       toast.error(error?.response?.data?.message || "Cancel failed");
+    }
+  };
+
+  const openReschedule = (booking) => {
+    setRescheduleTarget(booking);
+    setRescheduleForm({
+      bookingDate: booking.bookingDate || "",
+      startTime: String(booking.startTime || "09:00").slice(0, 5),
+      endTime: String(booking.endTime || "10:00").slice(0, 5),
+      expectedAttendees: booking.expectedAttendees || 1,
+    });
+  };
+
+  const handleRescheduleChange = (e) => {
+    setRescheduleForm({ ...rescheduleForm, [e.target.name]: e.target.value });
+  };
+
+  const submitReschedule = async (e) => {
+    e.preventDefault();
+
+    try {
+      await rescheduleBooking(rescheduleTarget.id, {
+        ...rescheduleForm,
+        expectedAttendees: Number(rescheduleForm.expectedAttendees),
+      });
+      toast.success("Reschedule request sent for admin approval");
+      setRescheduleTarget(null);
+      fetchBookings();
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Reschedule failed");
     }
   };
 
@@ -121,14 +158,25 @@ function UserDashboard() {
                     {booking.adminReason && (
                       <p className="text-sm text-zinc-500 mt-2">Admin reason: {booking.adminReason}</p>
                     )}
-                    {booking.status === "APPROVED" && (
-                      <button
-                        onClick={() => handleCancelBooking(booking.id)}
-                        className="mt-4 flex items-center gap-2 px-4 py-2 border border-red-200 text-red-700 hover:bg-red-50 rounded-2xl text-sm font-medium"
-                      >
-                        <XCircle className="w-4 h-4" />
-                        Cancel Booking
-                      </button>
+                    {["PENDING", "APPROVED"].includes(booking.status) && (
+                      <div className="mt-4 flex flex-wrap gap-3">
+                        <button
+                          onClick={() => openReschedule(booking)}
+                          className="flex items-center gap-2 px-4 py-2 border border-blue-200 text-blue-700 hover:bg-blue-50 rounded-2xl text-sm font-medium"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                          Reschedule
+                        </button>
+                        {booking.status === "APPROVED" && (
+                          <button
+                            onClick={() => handleCancelBooking(booking.id)}
+                            className="flex items-center gap-2 px-4 py-2 border border-red-200 text-red-700 hover:bg-red-50 rounded-2xl text-sm font-medium"
+                          >
+                            <XCircle className="w-4 h-4" />
+                            Cancel Booking
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 ))}
@@ -137,6 +185,80 @@ function UserDashboard() {
           </div>
         </section>
       </div>
+
+      {rescheduleTarget && (
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl p-8 relative">
+            <button
+              onClick={() => setRescheduleTarget(null)}
+              className="absolute right-5 top-5 text-zinc-400 hover:text-zinc-700"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <h3 className="text-2xl font-semibold text-zinc-900 mb-1">Reschedule Booking</h3>
+            <p className="text-zinc-500 mb-6">
+              {rescheduleTarget.resourceName} | current: {rescheduleTarget.bookingDate} {String(rescheduleTarget.startTime).slice(0, 5)} - {String(rescheduleTarget.endTime).slice(0, 5)}
+            </p>
+
+            <form onSubmit={submitReschedule} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1.5">New Date</label>
+                  <input
+                    name="bookingDate"
+                    type="date"
+                    value={rescheduleForm.bookingDate}
+                    onChange={handleRescheduleChange}
+                    required
+                    className="w-full border border-zinc-200 rounded-2xl px-4 py-3 focus:outline-none focus:border-zinc-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1.5">Start</label>
+                  <input
+                    name="startTime"
+                    type="time"
+                    value={rescheduleForm.startTime}
+                    onChange={handleRescheduleChange}
+                    required
+                    className="w-full border border-zinc-200 rounded-2xl px-4 py-3 focus:outline-none focus:border-zinc-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1.5">End</label>
+                  <input
+                    name="endTime"
+                    type="time"
+                    value={rescheduleForm.endTime}
+                    onChange={handleRescheduleChange}
+                    required
+                    className="w-full border border-zinc-200 rounded-2xl px-4 py-3 focus:outline-none focus:border-zinc-400"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1.5">Expected Attendees</label>
+                <input
+                  name="expectedAttendees"
+                  type="number"
+                  min="1"
+                  value={rescheduleForm.expectedAttendees}
+                  onChange={handleRescheduleChange}
+                  required
+                  className="w-full border border-zinc-200 rounded-2xl px-4 py-3 focus:outline-none focus:border-zinc-400"
+                />
+              </div>
+
+              <button className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl py-3 font-medium">
+                <RotateCcw className="w-5 h-5" />
+                Send Reschedule Request
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

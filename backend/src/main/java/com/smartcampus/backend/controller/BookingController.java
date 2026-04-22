@@ -5,6 +5,8 @@ import com.smartcampus.backend.service.BookingService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 
@@ -52,5 +54,24 @@ public class BookingController {
     @PutMapping("/{id}/cancel")
     public Booking cancel(@PathVariable String id) {
         return bookingService.cancel(id);
+    }
+
+    @PutMapping("/{id}/reschedule")
+    public Booking reschedule(@PathVariable String id, @RequestBody RescheduleRequest request) {
+        return bookingService.reschedule(
+                id,
+                request.bookingDate(),
+                request.startTime(),
+                request.endTime(),
+                request.expectedAttendees()
+        );
+    }
+
+    public record RescheduleRequest(
+            LocalDate bookingDate,
+            LocalTime startTime,
+            LocalTime endTime,
+            int expectedAttendees
+    ) {
     }
 }

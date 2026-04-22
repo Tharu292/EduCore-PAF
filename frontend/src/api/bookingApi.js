@@ -11,3 +11,4 @@ export const getResourceBookings = (resourceId) => API.get(`/resource/${resource
 export const approveBooking = (id, reason) => API.put(`/${id}/approve`, { reason });
 export const rejectBooking = (id, reason) => API.put(`/${id}/reject`, { reason });
 export const cancelBooking = (id) => API.put(`/${id}/cancel`);
+export const rescheduleBooking = (id, data) => API.put(`/${id}/reschedule`, data);

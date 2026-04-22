@@ -7,7 +7,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 
 @Service
@@ -88,6 +90,37 @@ public class BookingService {
         }
         booking.setStatus("CANCELLED");
         booking.setReviewedAt(LocalDateTime.now());
+        return bookingRepository.save(booking);
+    }
+
+    public Booking reschedule(String id, LocalDate bookingDate, LocalTime startTime, LocalTime endTime, int expectedAttendees) {
+        Booking booking = getById(id);
+
+        if (!List.of("PENDING", "APPROVED").contains(booking.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only pending or booked reservations can be rescheduled");
+        }
+
+        Resource resource = resourceService.getById(booking.getResourceId());
+
+        if (!endTime.isAfter(startTime)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "End time must be after start time");
+        }
+
+        if (expectedAttendees > resource.getCapacity()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Expected attendees exceed resource capacity");
+        }
+
+        booking.setBookingDate(bookingDate);
+        booking.setStartTime(startTime);
+        booking.setEndTime(endTime);
+        booking.setExpectedAttendees(expectedAttendees);
+
+        ensureCapacityAvailable(booking, resource, List.of("PENDING", "APPROVED"), booking.getId());
+
+        booking.setStatus("PENDING");
+        booking.setAdminReason("Reschedule requested");
+        booking.setReviewedAt(null);
+
         return bookingRepository.save(booking);
     }
 
