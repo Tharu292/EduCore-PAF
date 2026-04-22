@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { CalendarDays, CalendarClock, CheckCircle2, Clock, RotateCcw, Search, Users, X } from "lucide-react";
+import { CalendarDays, CalendarClock, CheckCircle2, Clock, MessageSquare, RotateCcw, Search, Star, Users, X } from "lucide-react";
 import { getResources } from "../api/resourceApi";
 import { createBooking, getResourceBookings, rescheduleBooking } from "../api/bookingApi";
-import { getResourceReviewSummary } from "../api/reviewApi";
+import { getResourceReviews, getResourceReviewSummary } from "../api/reviewApi";
 import SearchFilter from "../components/SearchFilter";
 import { buildResourceSlots } from "../utils/slotUtils";
 
@@ -17,6 +17,7 @@ function ResourceBookingPage() {
   const [filtered, setFiltered] = useState([]);
   const [selectedResource, setSelectedResource] = useState(null);
   const [resourceBookings, setResourceBookings] = useState([]);
+  const [resourceReviews, setResourceReviews] = useState([]);
   const [ratingSummaries, setRatingSummaries] = useState({});
   const [selectedDay, setSelectedDay] = useState("");
   const [selectedSlot, setSelectedSlot] = useState(null);
@@ -73,6 +74,20 @@ function ResourceBookingPage() {
     setSelectedSlot(null);
   }, [fetchResourceBookings]);
 
+  const fetchResourceReviews = useCallback(async () => {
+    if (!selectedResource?.id) return;
+    try {
+      const res = await getResourceReviews(selectedResource.id);
+      setResourceReviews(res.data || []);
+    } catch (error) {
+      setResourceReviews([]);
+    }
+  }, [selectedResource?.id]);
+
+  useEffect(() => {
+    fetchResourceReviews();
+  }, [fetchResourceReviews]);
+
   const groupedSlots = useMemo(
     () => selectedResource ? buildResourceSlots(selectedResource, resourceBookings, 7) : [],
     [selectedResource, resourceBookings]
@@ -85,6 +100,7 @@ function ResourceBookingPage() {
   }, [groupedSlots, selectedDay]);
 
   const activeDay = groupedSlots.find((day) => day.date === selectedDay);
+  const selectedSummary = selectedResource ? ratingSummaries[selectedResource.id] : null;
 
   const handleFilter = useCallback((filters) => {
     let result = [...resources];
@@ -230,6 +246,49 @@ function ResourceBookingPage() {
               <div className="bg-white border border-zinc-100 rounded-2xl p-8 text-center text-zinc-500">
                 <Search className="w-8 h-8 mx-auto mb-3 text-zinc-400" />
                 No active resources found.
+              </div>
+            )}
+
+            {selectedResource && (
+              <div className="bg-white border border-zinc-100 rounded-2xl p-5">
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <div>
+                    <h3 className="font-semibold text-zinc-900">Resource Rating</h3>
+                    <p className="text-sm text-zinc-500">{selectedResource.name}</p>
+                  </div>
+                  <div className="flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-100 rounded-2xl px-3 py-2">
+                    <Star className="w-4 h-4" />
+                    <span className="font-semibold">{selectedSummary?.averageRating || 0}/5</span>
+                  </div>
+                </div>
+
+                <p className="text-sm text-zinc-500 mb-4">
+                  {selectedSummary?.reviewCount || 0} student review{(selectedSummary?.reviewCount || 0) === 1 ? "" : "s"}
+                </p>
+
+                {resourceReviews.length === 0 ? (
+                  <div className="border border-dashed border-zinc-200 rounded-2xl p-4 text-sm text-zinc-500 flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4" />
+                    No reviews yet.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {resourceReviews.slice(0, 4).map((review) => (
+                      <div key={review.id} className="border border-zinc-100 rounded-2xl p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-medium text-zinc-900">{review.studentName}</p>
+                          <div className="flex items-center gap-1 text-amber-600 text-sm font-semibold">
+                            <Star className="w-4 h-4" />
+                            {review.rating}/5
+                          </div>
+                        </div>
+                        {review.comment && (
+                          <p className="text-sm text-zinc-600 mt-2">{review.comment}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </aside>
