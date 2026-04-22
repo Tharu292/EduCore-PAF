@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { BookOpenCheck, CalendarClock, Mail, RotateCcw, User, XCircle } from "lucide-react";
+import { BookOpenCheck, CalendarClock, Mail, MessageSquare, RotateCcw, Star, User, X, XCircle } from "lucide-react";
 import { cancelBooking, getStudentBookings } from "../api/bookingApi";
+import { saveResourceReview } from "../api/reviewApi";
 
 function UserDashboard() {
   const navigate = useNavigate();
   const currentUser = JSON.parse(localStorage.getItem("smartCampusUser") || "{}");
   const [bookings, setBookings] = useState([]);
+  const [reviewTarget, setReviewTarget] = useState(null);
+  const [reviewForm, setReviewForm] = useState({ rating: 5, comment: "" });
 
   const fetchBookings = useCallback(async () => {
     if (!currentUser?.id) return;
@@ -39,6 +42,29 @@ function UserDashboard() {
         rescheduleBooking: booking,
       },
     });
+  };
+
+  const openReview = (booking) => {
+    setReviewTarget(booking);
+    setReviewForm({ rating: 5, comment: "" });
+  };
+
+  const submitReview = async (e) => {
+    e.preventDefault();
+
+    try {
+      await saveResourceReview({
+        resourceId: reviewTarget.resourceId,
+        studentId: currentUser.id,
+        studentName: currentUser.name,
+        rating: Number(reviewForm.rating),
+        comment: reviewForm.comment,
+      });
+      toast.success("Review saved");
+      setReviewTarget(null);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Review failed");
+    }
   };
 
   const counts = {
@@ -140,13 +166,22 @@ function UserDashboard() {
                           Reschedule
                         </button>
                         {booking.status === "APPROVED" && (
-                          <button
-                            onClick={() => handleCancelBooking(booking.id)}
-                            className="flex items-center gap-2 px-4 py-2 border border-red-200 text-red-700 hover:bg-red-50 rounded-2xl text-sm font-medium"
-                          >
-                            <XCircle className="w-4 h-4" />
-                            Cancel Booking
-                          </button>
+                          <>
+                            <button
+                              onClick={() => openReview(booking)}
+                              className="flex items-center gap-2 px-4 py-2 border border-amber-200 text-amber-700 hover:bg-amber-50 rounded-2xl text-sm font-medium"
+                            >
+                              <MessageSquare className="w-4 h-4" />
+                              Review
+                            </button>
+                            <button
+                              onClick={() => handleCancelBooking(booking.id)}
+                              className="flex items-center gap-2 px-4 py-2 border border-red-200 text-red-700 hover:bg-red-50 rounded-2xl text-sm font-medium"
+                            >
+                              <XCircle className="w-4 h-4" />
+                              Cancel Booking
+                            </button>
+                          </>
                         )}
                       </div>
                     )}
@@ -157,6 +192,60 @@ function UserDashboard() {
           </div>
         </section>
       </div>
+
+      {reviewTarget && (
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-8 relative">
+            <button
+              onClick={() => setReviewTarget(null)}
+              className="absolute right-5 top-5 text-zinc-400 hover:text-zinc-700"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <h3 className="text-2xl font-semibold text-zinc-900 mb-1">Review Resource</h3>
+            <p className="text-zinc-500 mb-6">{reviewTarget.resourceName}</p>
+
+            <form onSubmit={submitReview} className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-2">Rating</label>
+                <div className="flex gap-2">
+                  {[1, 2, 3, 4, 5].map((rating) => (
+                    <button
+                      key={rating}
+                      type="button"
+                      onClick={() => setReviewForm({ ...reviewForm, rating })}
+                      className={`w-11 h-11 rounded-2xl border flex items-center justify-center ${
+                        reviewForm.rating >= rating
+                          ? "bg-amber-100 border-amber-300 text-amber-700"
+                          : "bg-white border-zinc-200 text-zinc-400"
+                      }`}
+                    >
+                      <Star className="w-5 h-5" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1.5">Comment</label>
+                <textarea
+                  rows="4"
+                  value={reviewForm.comment}
+                  onChange={(e) => setReviewForm({ ...reviewForm, comment: e.target.value })}
+                  className="w-full border border-zinc-200 rounded-2xl px-4 py-3 focus:outline-none focus:border-zinc-400"
+                  placeholder="Share your experience with this resource"
+                />
+              </div>
+
+              <button className="w-full flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl py-3 font-medium">
+                <Star className="w-5 h-5" />
+                Save Review
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

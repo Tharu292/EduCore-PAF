@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import { CalendarDays, CalendarClock, CheckCircle2, Clock, RotateCcw, Search, Users, X } from "lucide-react";
 import { getResources } from "../api/resourceApi";
 import { createBooking, getResourceBookings, rescheduleBooking } from "../api/bookingApi";
+import { getResourceReviewSummary } from "../api/reviewApi";
 import SearchFilter from "../components/SearchFilter";
 import { buildResourceSlots } from "../utils/slotUtils";
 
@@ -16,6 +17,7 @@ function ResourceBookingPage() {
   const [filtered, setFiltered] = useState([]);
   const [selectedResource, setSelectedResource] = useState(null);
   const [resourceBookings, setResourceBookings] = useState([]);
+  const [ratingSummaries, setRatingSummaries] = useState({});
   const [selectedDay, setSelectedDay] = useState("");
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [form, setForm] = useState({
@@ -37,6 +39,15 @@ function ResourceBookingPage() {
       if (!selectedResource && active.length > 0) {
         setSelectedResource(targetResource || active[0]);
       }
+
+      const summaries = await Promise.all(
+        visibleResources.map((resource) =>
+          getResourceReviewSummary(resource.id)
+            .then((summary) => [resource.id, summary.data])
+            .catch(() => [resource.id, { averageRating: 0, reviewCount: 0 }])
+        )
+      );
+      setRatingSummaries(Object.fromEntries(summaries));
     } catch (error) {
       toast.error("Failed to load resources");
     }
@@ -144,6 +155,7 @@ function ResourceBookingPage() {
   };
 
   const statusClass = (slot) => {
+    if (slot.status === "EXPIRED") return "border-zinc-200 bg-zinc-100 text-zinc-400";
     if (slot.status === "FULL") return "border-zinc-200 bg-zinc-100 text-zinc-500";
     if (slot.bookedSeats > 0 || slot.pendingSeats > 0) return "border-amber-200 bg-amber-50 text-amber-900 hover:border-blue-300 hover:bg-blue-50";
     return "border-zinc-200 bg-white text-zinc-800 hover:border-blue-300 hover:bg-blue-50";
@@ -207,6 +219,9 @@ function ResourceBookingPage() {
                 <div className="mt-4 flex flex-wrap gap-3 text-sm text-zinc-600">
                   <span className="flex items-center gap-1"><Users className="w-4 h-4" /> {resource.capacity}</span>
                   <span className="flex items-center gap-1"><Clock className="w-4 h-4" /> {resource.availability}</span>
+                  <span>
+                    Rating: {ratingSummaries[resource.id]?.averageRating || 0}/5 ({ratingSummaries[resource.id]?.reviewCount || 0})
+                  </span>
                 </div>
               </button>
             ))}
@@ -298,7 +313,7 @@ function ResourceBookingPage() {
                               </span>
                             </div>
                             <div className="text-xs mt-3 font-medium">
-                              {slot.status === "AVAILABLE" ? "Available for request" : "Full"}
+                              {slot.status === "AVAILABLE" ? "Available for request" : slot.status === "EXPIRED" ? "Expired" : "Full"}
                             </div>
                           </button>
                         );

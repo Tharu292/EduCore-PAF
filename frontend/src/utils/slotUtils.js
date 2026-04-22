@@ -18,6 +18,11 @@ const formatDate = (date) => {
   return `${year}-${month}-${day}`;
 };
 
+const isExpiredSlot = (date, startTime) => {
+  const slotStart = new Date(`${date}T${startTime}:00`);
+  return slotStart <= new Date();
+};
+
 const getAllowedDays = (availability = "") => {
   const firstPart = availability.replace(/\s+\d{2}:\d{2}-\d{2}:\d{2}.*/, "");
 
@@ -49,6 +54,10 @@ const overlapsSlot = (slot, booking) => {
 };
 
 const getSlotSummary = (slot, bookings, capacity) => {
+  if (isExpiredSlot(slot.date, slot.startTime)) {
+    return { pendingSeats: 0, bookedSeats: 0, seatsLeft: 0, status: "EXPIRED" };
+  }
+
   const activeBookings = bookings.filter((booking) =>
     ["PENDING", "APPROVED"].includes(booking.status) && overlapsSlot(slot, booking)
   );

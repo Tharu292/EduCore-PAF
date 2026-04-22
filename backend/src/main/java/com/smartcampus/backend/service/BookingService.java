@@ -34,6 +34,8 @@ public class BookingService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "End time must be after start time");
         }
 
+        ensureStartTimeIsFuture(booking.getBookingDate(), booking.getStartTime());
+
         if (booking.getExpectedAttendees() > resource.getCapacity()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Expected attendees exceed resource capacity");
         }
@@ -88,6 +90,12 @@ public class BookingService {
         if (!"APPROVED".equals(booking.getStatus())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only approved bookings can be cancelled");
         }
+
+        LocalDateTime bookingStart = LocalDateTime.of(booking.getBookingDate(), booking.getStartTime());
+        if (LocalDateTime.now().isAfter(bookingStart.minusHours(1))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bookings must be cancelled at least 1 hour before the start time");
+        }
+
         booking.setStatus("CANCELLED");
         booking.setReviewedAt(LocalDateTime.now());
         return bookingRepository.save(booking);
@@ -105,6 +113,8 @@ public class BookingService {
         if (!endTime.isAfter(startTime)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "End time must be after start time");
         }
+
+        ensureStartTimeIsFuture(bookingDate, startTime);
 
         if (expectedAttendees > resource.getCapacity()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Expected attendees exceed resource capacity");
@@ -145,6 +155,12 @@ public class BookingService {
 
         if (usedSeats + booking.getExpectedAttendees() > resource.getCapacity()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Not enough seats left in this time slot");
+        }
+    }
+
+    private void ensureStartTimeIsFuture(LocalDate bookingDate, LocalTime startTime) {
+        if (!LocalDateTime.of(bookingDate, startTime).isAfter(LocalDateTime.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot book expired time slots");
         }
     }
 }
