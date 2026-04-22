@@ -37,16 +37,34 @@ const getTimeRange = (availability = "") => {
   return match ? { start: match[1], end: match[2] } : { start: "08:00", end: "17:00" };
 };
 
-const getSlotStatus = (slot, bookings) => {
-  const matching = bookings.find((booking) =>
-    booking.bookingDate === slot.date
-      && String(booking.startTime).slice(0, 5) === slot.startTime
-      && String(booking.endTime).slice(0, 5) === slot.endTime
-      && ["PENDING", "APPROVED"].includes(booking.status)
+const overlapsSlot = (slot, booking) => {
+  if (booking.bookingDate !== slot.date) return false;
+
+  const slotStart = timeToMinutes(slot.startTime);
+  const slotEnd = timeToMinutes(slot.endTime);
+  const bookingStart = timeToMinutes(String(booking.startTime).slice(0, 5));
+  const bookingEnd = timeToMinutes(String(booking.endTime).slice(0, 5));
+
+  return slotStart < bookingEnd && slotEnd > bookingStart;
+};
+
+const getSlotSummary = (slot, bookings, capacity) => {
+  const activeBookings = bookings.filter((booking) =>
+    ["PENDING", "APPROVED"].includes(booking.status) && overlapsSlot(slot, booking)
   );
 
-  if (!matching) return "AVAILABLE";
-  return matching.status === "APPROVED" ? "BOOKED" : "PENDING";
+  const pendingSeats = activeBookings
+    .filter((booking) => booking.status === "PENDING")
+    .reduce((total, booking) => total + Number(booking.expectedAttendees || 0), 0);
+
+  const bookedSeats = activeBookings
+    .filter((booking) => booking.status === "APPROVED")
+    .reduce((total, booking) => total + Number(booking.expectedAttendees || 0), 0);
+
+  const seatsLeft = Math.max(capacity - pendingSeats - bookedSeats, 0);
+  const status = seatsLeft <= 0 ? "FULL" : "AVAILABLE";
+
+  return { pendingSeats, bookedSeats, seatsLeft, status };
 };
 
 export const buildResourceSlots = (resource, bookings = [], daysAhead = 7) => {
@@ -54,6 +72,7 @@ export const buildResourceSlots = (resource, bookings = [], daysAhead = 7) => {
   const { start, end } = getTimeRange(resource?.availability);
   const startMinutes = timeToMinutes(start);
   const endMinutes = timeToMinutes(end);
+  const capacity = Number(resource?.capacity || 0);
   const result = [];
 
   for (let offset = 0; offset < daysAhead; offset += 1) {
@@ -77,7 +96,7 @@ export const buildResourceSlots = (resource, bookings = [], daysAhead = 7) => {
 
       daySlots.push({
         ...slot,
-        status: getSlotStatus(slot, bookings),
+        ...getSlotSummary(slot, bookings, capacity),
       });
 
       current = next;
@@ -86,6 +105,7 @@ export const buildResourceSlots = (resource, bookings = [], daysAhead = 7) => {
     result.push({
       date: formatDate(date),
       dayName,
+      label: offset === 0 ? "Today" : dayName,
       slots: daySlots,
     });
   }

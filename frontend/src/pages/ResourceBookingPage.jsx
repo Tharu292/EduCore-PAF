@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { CalendarClock, CheckCircle2, Clock, Search, Users } from "lucide-react";
+import { CalendarDays, CalendarClock, CheckCircle2, Clock, Search, Users } from "lucide-react";
 import { getResources } from "../api/resourceApi";
 import { createBooking, getResourceBookings } from "../api/bookingApi";
 import SearchFilter from "../components/SearchFilter";
@@ -12,6 +12,7 @@ function ResourceBookingPage() {
   const [filtered, setFiltered] = useState([]);
   const [selectedResource, setSelectedResource] = useState(null);
   const [resourceBookings, setResourceBookings] = useState([]);
+  const [selectedDay, setSelectedDay] = useState("");
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [form, setForm] = useState({ purpose: "", expectedAttendees: 1 });
 
@@ -45,6 +46,7 @@ function ResourceBookingPage() {
 
   useEffect(() => {
     fetchResourceBookings();
+    setSelectedDay("");
     setSelectedSlot(null);
   }, [fetchResourceBookings]);
 
@@ -52,6 +54,14 @@ function ResourceBookingPage() {
     () => selectedResource ? buildResourceSlots(selectedResource, resourceBookings, 7) : [],
     [selectedResource, resourceBookings]
   );
+
+  useEffect(() => {
+    if (groupedSlots.length > 0 && !groupedSlots.some((day) => day.date === selectedDay)) {
+      setSelectedDay(groupedSlots[0].date);
+    }
+  }, [groupedSlots, selectedDay]);
+
+  const activeDay = groupedSlots.find((day) => day.date === selectedDay);
 
   const handleFilter = useCallback((filters) => {
     let result = [...resources];
@@ -83,6 +93,11 @@ function ResourceBookingPage() {
       return;
     }
 
+    if (Number(form.expectedAttendees) > selectedSlot.seatsLeft) {
+      toast.error(`Only ${selectedSlot.seatsLeft} seats left in this slot`);
+      return;
+    }
+
     try {
       await createBooking({
         resourceId: selectedResource.id,
@@ -104,9 +119,9 @@ function ResourceBookingPage() {
     }
   };
 
-  const statusClass = (status) => {
-    if (status === "BOOKED") return "border-emerald-200 bg-emerald-50 text-emerald-800";
-    if (status === "PENDING") return "border-amber-200 bg-amber-50 text-amber-800";
+  const statusClass = (slot) => {
+    if (slot.status === "FULL") return "border-zinc-200 bg-zinc-100 text-zinc-500";
+    if (slot.bookedSeats > 0 || slot.pendingSeats > 0) return "border-amber-200 bg-amber-50 text-amber-900 hover:border-blue-300 hover:bg-blue-50";
     return "border-zinc-200 bg-white text-zinc-800 hover:border-blue-300 hover:bg-blue-50";
   };
 
@@ -166,14 +181,43 @@ function ResourceBookingPage() {
               </div>
 
               <div className="p-6 space-y-6">
-                {groupedSlots.map((day) => (
-                  <section key={day.date}>
-                    <div className="mb-3">
-                      <h3 className="font-semibold text-zinc-900">{day.dayName}</h3>
-                      <p className="text-sm text-zinc-500">{day.date}</p>
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <CalendarDays className="w-5 h-5 text-zinc-500" />
+                    <h3 className="font-semibold text-zinc-900">Select Day</h3>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3">
+                    {groupedSlots.map((day) => (
+                      <button
+                        key={day.date}
+                        onClick={() => {
+                          setSelectedDay(day.date);
+                          setSelectedSlot(null);
+                        }}
+                        className={`border rounded-2xl px-4 py-3 text-left transition ${
+                          selectedDay === day.date
+                            ? "border-blue-500 bg-blue-50 text-blue-800"
+                            : "border-zinc-200 bg-white hover:border-zinc-300"
+                        }`}
+                      >
+                        <div className="text-sm font-semibold">{day.label}</div>
+                        <div className="text-xs text-zinc-500 mt-1">{day.date}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {activeDay ? (
+                  <section>
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="font-semibold text-zinc-900">{activeDay.dayName} Slots</h3>
+                        <p className="text-sm text-zinc-500">{activeDay.date}</p>
+                      </div>
+                      <p className="text-sm text-zinc-500">Capacity: {selectedResource?.capacity || 0}</p>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                      {day.slots.map((slot) => {
+                      {activeDay.slots.map((slot) => {
                         const isSelected = selectedSlot
                           && selectedSlot.date === slot.date
                           && selectedSlot.startTime === slot.startTime;
@@ -182,19 +226,42 @@ function ResourceBookingPage() {
                           <button
                             key={`${slot.date}-${slot.startTime}`}
                             disabled={slot.status !== "AVAILABLE"}
-                            onClick={() => setSelectedSlot(slot)}
-                            className={`border rounded-2xl px-4 py-3 text-left transition disabled:cursor-not-allowed ${statusClass(slot.status)} ${
+                            onClick={() => {
+                              setSelectedSlot(slot);
+                              setForm((current) => ({
+                                ...current,
+                                expectedAttendees: Math.min(Number(current.expectedAttendees || 1), slot.seatsLeft || 1),
+                              }));
+                            }}
+                            className={`border rounded-2xl px-4 py-4 text-left transition disabled:cursor-not-allowed ${statusClass(slot)} ${
                               isSelected ? "ring-2 ring-blue-500 border-blue-500" : ""
                             }`}
                           >
                             <div className="font-semibold">{slot.startTime} - {slot.endTime}</div>
-                            <div className="text-xs mt-1">{slot.status === "AVAILABLE" ? "Available" : slot.status === "PENDING" ? "Pending approval" : "Booked"}</div>
+                            <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                              <span className="rounded-xl bg-white/70 border border-white px-2 py-1">
+                                Left: <b>{slot.seatsLeft}</b>
+                              </span>
+                              <span className="rounded-xl bg-white/70 border border-white px-2 py-1">
+                                Pending: <b>{slot.pendingSeats}</b>
+                              </span>
+                              <span className="rounded-xl bg-white/70 border border-white px-2 py-1">
+                                Booked: <b>{slot.bookedSeats}</b>
+                              </span>
+                            </div>
+                            <div className="text-xs mt-3 font-medium">
+                              {slot.status === "AVAILABLE" ? "Available for request" : "Full"}
+                            </div>
                           </button>
                         );
                       })}
                     </div>
                   </section>
-                ))}
+                ) : (
+                  <div className="border border-zinc-200 bg-zinc-50 rounded-2xl p-8 text-center text-zinc-500">
+                    No available days found for this resource window.
+                  </div>
+                )}
               </div>
             </div>
 
@@ -222,7 +289,7 @@ function ResourceBookingPage() {
                 <input
                   type="number"
                   min="1"
-                  max={selectedResource?.capacity || 1}
+                  max={selectedSlot?.seatsLeft || selectedResource?.capacity || 1}
                   value={form.expectedAttendees}
                   onChange={(e) => setForm({ ...form, expectedAttendees: e.target.value })}
                   required

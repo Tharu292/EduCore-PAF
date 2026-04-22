@@ -36,7 +36,7 @@ public class BookingService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Expected attendees exceed resource capacity");
         }
 
-        ensureNoConflict(booking);
+        ensureCapacityAvailable(booking, resource, List.of("PENDING", "APPROVED"), null);
 
         booking.setResourceName(resource.getName());
         booking.setResourceType(resource.getType());
@@ -65,7 +65,8 @@ public class BookingService {
 
     public Booking approve(String id, String reason) {
         Booking booking = getById(id);
-        ensureNoConflictForApproval(booking);
+        Resource resource = resourceService.getById(booking.getResourceId());
+        ensureCapacityAvailable(booking, resource, List.of("APPROVED"), booking.getId());
         booking.setStatus("APPROVED");
         booking.setAdminReason(reason);
         booking.setReviewedAt(LocalDateTime.now());
@@ -95,38 +96,22 @@ public class BookingService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
     }
 
-    private void ensureNoConflict(Booking booking) {
+    private void ensureCapacityAvailable(Booking booking, Resource resource, List<String> statuses, String ignoredBookingId) {
         List<Booking> existing = bookingRepository.findByResourceIdAndBookingDateAndStatusIn(
                 booking.getResourceId(),
                 booking.getBookingDate(),
-                List.of("PENDING", "APPROVED")
+                statuses
         );
 
-        boolean overlaps = existing.stream().anyMatch(current ->
-                booking.getStartTime().isBefore(current.getEndTime())
-                        && booking.getEndTime().isAfter(current.getStartTime())
-        );
+        int usedSeats = existing.stream()
+                .filter(current -> ignoredBookingId == null || !ignoredBookingId.equals(current.getId()))
+                .filter(current -> booking.getStartTime().isBefore(current.getEndTime())
+                        && booking.getEndTime().isAfter(current.getStartTime()))
+                .mapToInt(Booking::getExpectedAttendees)
+                .sum();
 
-        if (overlaps) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "This resource already has a booking in that time range");
-        }
-    }
-
-    private void ensureNoConflictForApproval(Booking booking) {
-        List<Booking> existing = bookingRepository.findByResourceIdAndBookingDateAndStatusIn(
-                booking.getResourceId(),
-                booking.getBookingDate(),
-                List.of("APPROVED")
-        );
-
-        boolean overlaps = existing.stream().anyMatch(current ->
-                !current.getId().equals(booking.getId())
-                        && booking.getStartTime().isBefore(current.getEndTime())
-                        && booking.getEndTime().isAfter(current.getStartTime())
-        );
-
-        if (overlaps) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Another approved booking already uses this time range");
+        if (usedSeats + booking.getExpectedAttendees() > resource.getCapacity()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Not enough seats left in this time slot");
         }
     }
 }
