@@ -4,6 +4,7 @@ import CreateTicket from "./pages/CreateTicket";
 import MyTickets from "./pages/MyTickets";
 import TechnicianTickets from "./pages/TechnicianTickets";
 import AdminDashboard from "./pages/AdminDashboard";
+import AdminBookingManagement from "./pages/AdminBookingManagement";
 import UserDashboard from "./pages/UserDashboard";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
@@ -24,6 +25,7 @@ function App() {
 
         {/* 🔥 NEW DASHBOARDS */}
         <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/admin/bookings" element={<AdminBookingManagement />} />
         <Route path="/user" element={<UserDashboard />} />
 
         <Route path="/resources" element={<ResourceBookingPage />} />
