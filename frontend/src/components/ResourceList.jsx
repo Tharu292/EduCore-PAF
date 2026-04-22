@@ -4,10 +4,11 @@ import {
   Calendar, 
   Package, 
   Edit2, 
-  Trash2 
+  Trash2,
+  ClipboardPlus
 } from "lucide-react";
 
-function ResourceList({ resources, onDelete, onEdit, isAdmin }) {
+function ResourceList({ resources, onDelete, onEdit, onBook, isAdmin }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {resources.length === 0 ? (
@@ -101,6 +102,18 @@ function ResourceList({ resources, onDelete, onEdit, isAdmin }) {
                 >
                   <Trash2 className="w-4 h-4" />
                   Delete
+                </button>
+              </div>
+            )}
+
+            {!isAdmin && onBook && r.status === "ACTIVE" && (
+              <div className="border-t border-blue-100 bg-white px-6 py-4">
+                <button
+                  onClick={() => onBook(r)}
+                  className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-2xl text-sm font-medium transition-colors"
+                >
+                  <ClipboardPlus className="w-4 h-4" />
+                  Request Booking
                 </button>
               </div>
             )}

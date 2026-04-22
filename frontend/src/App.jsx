@@ -5,6 +5,9 @@ import MyTickets from "./pages/MyTickets";
 import TechnicianTickets from "./pages/TechnicianTickets";
 import AdminDashboard from "./pages/AdminDashboard";
 import UserDashboard from "./pages/UserDashboard";
+import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
+import ResourceBookingPage from "./pages/ResourceBookingPage";
 import Navbar from "./components/NavBar";
 
 function App() {
@@ -13,7 +16,9 @@ function App() {
     <Navbar />
     <div className="mt-2">   {/* Optional padding under navbar */}
       <Routes>
-        <Route path="/" element={<CreateTicket />} />
+        <Route path="/" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/tickets/create" element={<CreateTicket />} />
         <Route path="/my" element={<MyTickets />} />
         <Route path="/tech" element={<TechnicianTickets />} />
 
@@ -21,7 +26,7 @@ function App() {
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/user" element={<UserDashboard />} />
 
-        <Route path="/resources" element={<AdminDashboard />} />
+        <Route path="/resources" element={<ResourceBookingPage />} />
       </Routes>
       </div>
     </BrowserRouter>

@@ -1,159 +1,173 @@
-import { useEffect, useState, useCallback } from "react";
-import { getResources } from "../api/resourceApi";
-import ResourceList from "../components/ResourceList";
-import SearchFilter from "../components/SearchFilter";
-import {
-  LayoutDashboard,
-  RefreshCw,
-  Search,
-  Package
-} from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import toast from "react-hot-toast";
+import { BookOpenCheck, CalendarClock, Mail, User, XCircle } from "lucide-react";
+import { cancelBooking, getStudentBookings } from "../api/bookingApi";
 
 function UserDashboard() {
-  const [resources, setResources] = useState([]);
-  const [filtered, setFiltered] = useState([]);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const currentUser = JSON.parse(localStorage.getItem("smartCampusUser") || "{}");
+  const [bookings, setBookings] = useState([]);
 
-  const fetchResources = useCallback(async () => {
-    setIsRefreshing(true);
+  const fetchBookings = useCallback(async () => {
+    if (!currentUser?.id) return;
     try {
-      const res = await getResources();
-      const data = res?.data || [];
-      setResources(data);
-      setFiltered(data);
-    } catch (err) {
-      console.error("API ERROR:", err);
-    } finally {
-      setIsRefreshing(false);
+      const res = await getStudentBookings(currentUser.id);
+      setBookings(res.data || []);
+    } catch (error) {
+      toast.error("Failed to load your bookings");
     }
-  }, []);
+  }, [currentUser?.id]);
 
   useEffect(() => {
-    fetchResources();
-  }, [fetchResources]);
+    fetchBookings();
+  }, [fetchBookings]);
 
-  const handleFilter = useCallback((filters) => {
-    let result = [...resources];
-
-    if (filters?.search?.trim()) {
-      const s = filters.search.toLowerCase().trim();
-      result = result.filter(
-        (r) =>
-          (r.name || "").toLowerCase().includes(s) ||
-          (r.location || "").toLowerCase().includes(s)
-      );
+  const handleCancelBooking = async (id) => {
+    try {
+      await cancelBooking(id);
+      toast.success("Booking cancelled");
+      fetchBookings();
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Cancel failed");
     }
+  };
 
-    if (filters?.type) {
-      result = result.filter(
-        (r) => (r.type || "").toLowerCase() === filters.type.toLowerCase()
-      );
-    }
-
-    if (filters?.status) {
-      result = result.filter(
-        (r) => (r.status || "").toLowerCase() === filters.status.toLowerCase()
-      );
-    }
-
-    setFiltered(result);
-  }, [resources]);
-
-  const clearFilters = () => {
-    setFiltered(resources);
+  const counts = {
+    total: bookings.length,
+    pending: bookings.filter((booking) => booking.status === "PENDING").length,
+    approved: bookings.filter((booking) => booking.status === "APPROVED").length,
   };
 
   return (
     <div className="min-h-screen bg-zinc-50 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-6xl mx-auto">
+        <div className="bg-blue-600 text-white rounded-2xl p-8 mb-8">
+          <p className="text-blue-100">Student Dashboard</p>
+          <h1 className="text-4xl font-semibold mt-2">Welcome, {currentUser?.name || "Student"}</h1>
+          <p className="text-blue-100 mt-3">View your details, request resources, and track booking approvals.</p>
+        </div>
 
-        {/* Welcome Banner - Blue Background */}
-        <div className="mb-12 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-3xl p-10 shadow-sm">
-          <div className="flex flex-col md:flex-row md:items-center gap-6">
-            <div className="flex-shrink-0">
-              <div className="w-16 h-16 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center">
-                <LayoutDashboard className="w-9 h-9" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <div className="lg:col-span-2 bg-white border border-zinc-100 rounded-2xl p-6">
+            <h2 className="text-xl font-semibold text-zinc-900 mb-5">My Details</h2>
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-zinc-100 rounded-2xl flex items-center justify-center">
+                  <User className="w-5 h-5 text-zinc-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-zinc-500">Name</p>
+                  <p className="font-medium text-zinc-900">{currentUser?.name || "Not signed in"}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-zinc-100 rounded-2xl flex items-center justify-center">
+                  <Mail className="w-5 h-5 text-zinc-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-zinc-500">Email</p>
+                  <p className="font-medium text-zinc-900">{currentUser?.email || "-"}</p>
+                </div>
               </div>
             </div>
-            <div>
-              <h1 className="text-4xl font-semibold tracking-tight">
-                Welcome back, Nishadi!
-              </h1>
-              <p className="text-blue-100 mt-3 text-lg">
-                Browse and reserve available campus resources easily.
-              </p>
-            </div>
-          </div>
-        </div>
 
-        {/* Header with Refresh Button */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h2 className="text-2xl font-semibold text-zinc-900">Available Resources</h2>
-            <p className="text-zinc-500">Find labs, rooms, and equipment</p>
-          </div>
-
-          <button
-            onClick={fetchResources}
-            disabled={isRefreshing}
-            className="flex items-center gap-2 px-6 py-3 bg-white hover:bg-zinc-50 border border-zinc-200 rounded-2xl text-sm font-medium text-zinc-700 transition-colors disabled:opacity-70"
-          >
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
-        </div>
-
-        {/* Search & Filter Card */}
-        <div className="bg-white rounded-3xl shadow-sm border border-zinc-100 p-8 mb-10">
-          <SearchFilter onFilter={handleFilter} />
-        </div>
-
-        {/* Resources List Card */}
-        <div className="bg-white rounded-3xl shadow-sm border border-zinc-100 overflow-hidden">
-          <div className="px-8 py-6 border-b border-zinc-100 bg-zinc-50 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Package className="w-5 h-5 text-zinc-500" />
-              <h3 className="text-lg font-semibold text-zinc-800">All Resources</h3>
-            </div>
-
-            {filtered.length !== resources.length && (
-              <button
-                onClick={clearFilters}
-                className="text-sm font-medium text-zinc-500 hover:text-zinc-700 transition-colors"
+            <div className="mt-8 flex flex-col sm:flex-row gap-3">
+              <Link
+                to="/resources"
+                className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl px-5 py-3 font-medium"
               >
-                Clear Filters
-              </button>
+                <BookOpenCheck className="w-5 h-5" />
+                Book Resource
+              </Link>
+              <a
+                href="#my-bookings"
+                className="flex items-center justify-center gap-2 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 rounded-2xl px-5 py-3 font-medium"
+              >
+                <CalendarClock className="w-5 h-5" />
+                View My Bookings
+              </a>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 lg:grid-cols-1 gap-4">
+            <SummaryCard label="Total" value={counts.total} />
+            <SummaryCard label="Pending" value={counts.pending} tone="amber" />
+            <SummaryCard label="Booked" value={counts.approved} tone="emerald" />
+          </div>
+        </div>
+
+        <section id="my-bookings" className="bg-white border border-zinc-100 rounded-2xl overflow-hidden">
+          <div className="px-6 py-5 border-b border-zinc-100 bg-zinc-50 flex items-center gap-3">
+            <CalendarClock className="w-5 h-5 text-zinc-500" />
+            <h2 className="font-semibold text-zinc-900">My Bookings</h2>
+          </div>
+
+          <div className="p-6">
+            {bookings.length === 0 ? (
+              <p className="text-zinc-500">No bookings yet. Use the booking button to request a resource.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {bookings.map((booking) => (
+                  <div key={booking.id} className="border border-zinc-200 rounded-2xl p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="font-semibold text-zinc-900">{booking.resourceName}</h3>
+                        <p className="text-sm text-zinc-500">{booking.bookingDate} | {booking.startTime} - {booking.endTime}</p>
+                      </div>
+                      <StatusBadge status={booking.status} />
+                    </div>
+                    <p className="text-sm text-zinc-700 mt-3">{booking.purpose}</p>
+                    <p className="text-sm text-zinc-500 mt-2">Attendees: {booking.expectedAttendees}</p>
+                    {booking.adminReason && (
+                      <p className="text-sm text-zinc-500 mt-2">Admin reason: {booking.adminReason}</p>
+                    )}
+                    {booking.status === "APPROVED" && (
+                      <button
+                        onClick={() => handleCancelBooking(booking.id)}
+                        className="mt-4 flex items-center gap-2 px-4 py-2 border border-red-200 text-red-700 hover:bg-red-50 rounded-2xl text-sm font-medium"
+                      >
+                        <XCircle className="w-4 h-4" />
+                        Cancel Booking
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
           </div>
-
-          <div className="p-8">
-            <ResourceList
-              resources={filtered}
-              isAdmin={false}
-            />
-          </div>
-
-          {/* Empty State */}
-          {filtered.length === 0 && (
-            <div className="py-20 text-center">
-              <div className="mx-auto w-20 h-20 bg-zinc-100 rounded-3xl flex items-center justify-center mb-6">
-                <Search className="w-10 h-10 text-zinc-400" />
-              </div>
-              <h3 className="text-xl font-medium text-zinc-800 mb-2">No matching resources found</h3>
-              <p className="text-zinc-500 max-w-md mx-auto">
-                Try adjusting your search or filter criteria
-              </p>
-              <button
-                onClick={clearFilters}
-                className="mt-6 px-6 py-2.5 bg-zinc-900 hover:bg-black text-white text-sm font-medium rounded-2xl transition-colors"
-              >
-                Clear All Filters
-              </button>
-            </div>
-          )}
-        </div>
+        </section>
       </div>
     </div>
+  );
+}
+
+function SummaryCard({ label, value, tone = "blue" }) {
+  const toneClass = {
+    blue: "bg-blue-50 text-blue-700",
+    amber: "bg-amber-50 text-amber-700",
+    emerald: "bg-emerald-50 text-emerald-700",
+  }[tone];
+
+  return (
+    <div className={`${toneClass} rounded-2xl p-5`}>
+      <p className="text-3xl font-semibold">{value}</p>
+      <p className="text-sm font-medium mt-1">{label}</p>
+    </div>
+  );
+}
+
+function StatusBadge({ status }) {
+  const styles = {
+    APPROVED: "bg-emerald-100 text-emerald-700",
+    REJECTED: "bg-red-100 text-red-700",
+    CANCELLED: "bg-zinc-100 text-zinc-600",
+    PENDING: "bg-amber-100 text-amber-700",
+  };
+
+  return (
+    <span className={`text-xs font-semibold px-3 py-1 rounded-2xl ${styles[status] || styles.PENDING}`}>
+      {status === "APPROVED" ? "BOOKED" : status}
+    </span>
   );
 }
 
