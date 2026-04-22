@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { CalendarDays, CalendarClock, CheckCircle2, Clock, Search, Users } from "lucide-react";
+import { CalendarDays, CalendarClock, CheckCircle2, Clock, RotateCcw, Search, Users, X } from "lucide-react";
 import { getResources } from "../api/resourceApi";
-import { createBooking, getResourceBookings } from "../api/bookingApi";
+import { createBooking, getResourceBookings, rescheduleBooking } from "../api/bookingApi";
 import SearchFilter from "../components/SearchFilter";
 import { buildResourceSlots } from "../utils/slotUtils";
 
 function ResourceBookingPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const rescheduleTarget = location.state?.rescheduleBooking || null;
   const currentUser = JSON.parse(localStorage.getItem("smartCampusUser") || "{}");
   const [resources, setResources] = useState([]);
   const [filtered, setFiltered] = useState([]);
@@ -14,21 +18,29 @@ function ResourceBookingPage() {
   const [resourceBookings, setResourceBookings] = useState([]);
   const [selectedDay, setSelectedDay] = useState("");
   const [selectedSlot, setSelectedSlot] = useState(null);
-  const [form, setForm] = useState({ purpose: "", expectedAttendees: 1 });
+  const [form, setForm] = useState({
+    purpose: rescheduleTarget?.purpose || "",
+    expectedAttendees: rescheduleTarget?.expectedAttendees || 1
+  });
 
   const fetchResources = useCallback(async () => {
     try {
       const res = await getResources();
       const active = (res.data || []).filter((resource) => resource.status === "ACTIVE");
-      setResources(active);
-      setFiltered(active);
+      const targetResource = rescheduleTarget
+        ? active.find((resource) => resource.id === rescheduleTarget.resourceId)
+        : null;
+      const visibleResources = targetResource ? [targetResource] : active;
+
+      setResources(visibleResources);
+      setFiltered(visibleResources);
       if (!selectedResource && active.length > 0) {
-        setSelectedResource(active[0]);
+        setSelectedResource(targetResource || active[0]);
       }
     } catch (error) {
       toast.error("Failed to load resources");
     }
-  }, [selectedResource]);
+  }, [rescheduleTarget, selectedResource]);
 
   useEffect(() => {
     fetchResources();
@@ -99,17 +111,29 @@ function ResourceBookingPage() {
     }
 
     try {
+      if (rescheduleTarget) {
+        await rescheduleBooking(rescheduleTarget.id, {
+          bookingDate: selectedSlot.date,
+          startTime: selectedSlot.startTime,
+          endTime: selectedSlot.endTime,
+          expectedAttendees: Number(form.expectedAttendees),
+        });
+        toast.success("Reschedule request sent for admin approval");
+        navigate("/user");
+        return;
+      }
+
       await createBooking({
-        resourceId: selectedResource.id,
-        studentId: currentUser.id,
-        studentName: currentUser.name,
-        studentEmail: currentUser.email,
-        bookingDate: selectedSlot.date,
-        startTime: selectedSlot.startTime,
-        endTime: selectedSlot.endTime,
-        purpose: form.purpose,
-        expectedAttendees: Number(form.expectedAttendees),
-      });
+          resourceId: selectedResource.id,
+          studentId: currentUser.id,
+          studentName: currentUser.name,
+          studentEmail: currentUser.email,
+          bookingDate: selectedSlot.date,
+          startTime: selectedSlot.startTime,
+          endTime: selectedSlot.endTime,
+          purpose: form.purpose,
+          expectedAttendees: Number(form.expectedAttendees),
+        });
       toast.success("Booking request sent for admin approval");
       setForm({ purpose: "", expectedAttendees: 1 });
       setSelectedSlot(null);
@@ -129,9 +153,33 @@ function ResourceBookingPage() {
     <div className="min-h-screen bg-zinc-50 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-4xl font-semibold text-zinc-900">Book a Resource</h1>
-          <p className="text-zinc-500 mt-2">Select a resource, choose a two-hour slot, and send it for admin approval.</p>
+          <h1 className="text-4xl font-semibold text-zinc-900">
+            {rescheduleTarget ? "Reschedule Booking" : "Book a Resource"}
+          </h1>
+          <p className="text-zinc-500 mt-2">
+            {rescheduleTarget
+              ? "Choose a new day and slot using the resource availability view."
+              : "Select a resource, choose a two-hour slot, and send it for admin approval."}
+          </p>
         </div>
+
+        {rescheduleTarget && (
+          <div className="bg-blue-50 border border-blue-100 text-blue-900 rounded-2xl p-5 mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold">Rescheduling: {rescheduleTarget.resourceName}</p>
+              <p className="text-sm mt-1">
+                Current booking: {rescheduleTarget.bookingDate} | {String(rescheduleTarget.startTime).slice(0, 5)} - {String(rescheduleTarget.endTime).slice(0, 5)}
+              </p>
+            </div>
+            <button
+              onClick={() => navigate("/user")}
+              className="flex items-center justify-center gap-2 border border-blue-200 bg-white hover:bg-blue-50 rounded-2xl px-4 py-2 text-sm font-medium"
+            >
+              <X className="w-4 h-4" />
+              Cancel Reschedule
+            </button>
+          </div>
+        )}
 
         <div className="bg-white border border-zinc-100 rounded-2xl p-6 mb-8">
           <SearchFilter onFilter={handleFilter} />
@@ -278,9 +326,10 @@ function ResourceBookingPage() {
                 <textarea
                   value={form.purpose}
                   onChange={(e) => setForm({ ...form, purpose: e.target.value })}
+                  disabled={!!rescheduleTarget}
                   required
                   rows="3"
-                  className="w-full border border-zinc-200 rounded-2xl px-4 py-3 focus:outline-none focus:border-zinc-400"
+                  className="w-full border border-zinc-200 rounded-2xl px-4 py-3 focus:outline-none focus:border-zinc-400 disabled:bg-zinc-50 disabled:text-zinc-500"
                 />
               </div>
 
@@ -301,8 +350,8 @@ function ResourceBookingPage() {
                 disabled={!selectedSlot}
                 className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl py-3 font-medium disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <CheckCircle2 className="w-5 h-5" />
-                Request Booking
+                {rescheduleTarget ? <RotateCcw className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />}
+                {rescheduleTarget ? "Send Reschedule Request" : "Request Booking"}
               </button>
             </form>
           </main>
