@@ -17,10 +17,16 @@ public class BookingService {
 
     private final BookingRepository bookingRepository;
     private final ResourceService resourceService;
+    private final BookingNotificationService notificationService;
 
-    public BookingService(BookingRepository bookingRepository, ResourceService resourceService) {
+    public BookingService(
+            BookingRepository bookingRepository,
+            ResourceService resourceService,
+            BookingNotificationService notificationService
+    ) {
         this.bookingRepository = bookingRepository;
         this.resourceService = resourceService;
+        this.notificationService = notificationService;
     }
 
     public Booking create(Booking booking) {
@@ -74,7 +80,9 @@ public class BookingService {
         booking.setStatus("APPROVED");
         booking.setAdminReason(reason);
         booking.setReviewedAt(LocalDateTime.now());
-        return bookingRepository.save(booking);
+        Booking saved = bookingRepository.save(booking);
+        notificationService.sendApprovalEmail(saved);
+        return saved;
     }
 
     public Booking reject(String id, String reason) {
@@ -82,7 +90,9 @@ public class BookingService {
         booking.setStatus("REJECTED");
         booking.setAdminReason(reason);
         booking.setReviewedAt(LocalDateTime.now());
-        return bookingRepository.save(booking);
+        Booking saved = bookingRepository.save(booking);
+        notificationService.sendRejectionEmail(saved);
+        return saved;
     }
 
     public Booking cancel(String id) {
