@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const API = axios.create({
-  baseURL: "http://localhost:8081/api/reviews",
+  baseURL: "http://localhost:8080/api/reviews",
 });
 
 export const saveResourceReview = (data) => API.post("", data);

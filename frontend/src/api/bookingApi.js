@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const API = axios.create({
-  baseURL: "http://localhost:8081/api/bookings",
+  baseURL: "http://localhost:8080/api/bookings",
 });
 
 export const createBooking = (data) => API.post("", data);

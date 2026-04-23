@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const API = axios.create({
-  baseURL: "http://localhost:8081/api/resources",
+  baseURL: "http://localhost:8080/api/resources",
 });
 
 export const getResources = () => API.get("/");
