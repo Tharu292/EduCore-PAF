@@ -35,15 +35,27 @@ public class TicketService {
 
     public Ticket createTicket(Ticket ticket, Authentication auth) {
         User currentUser = (User) auth.getPrincipal();
+        LocalDateTime now = LocalDateTime.now();
 
         ticket.setCreatedBy(currentUser.getClerkUserId());
         ticket.setAssignedTo(null);
         ticket.setStatus(Ticket.Status.OPEN);
-        ticket.setCreatedAt(LocalDateTime.now());
-        ticket.setUpdatedAt(LocalDateTime.now());
+        ticket.setCreatedAt(now);
+        ticket.setUpdatedAt(now);
+
+        ticket.setAssignedAt(null);
+        ticket.setResolvedAt(null);
+        ticket.setClosedAt(null);
+        ticket.setRejectedAt(null);
+        ticket.setFirstResponseAt(null);
+
+        ticket.setRejectionReason(null);
+        ticket.setResolutionNotes(null);
 
         if (ticket.getComments() == null) ticket.setComments(new ArrayList<>());
         if (ticket.getAttachments() == null) ticket.setAttachments(new ArrayList<>());
+
+        ticket.setDueAt(calculateDueAt(ticket.getPriority(), now));
 
         Ticket savedTicket = ticketRepository.save(ticket);
 
@@ -75,8 +87,17 @@ public class TicketService {
     }
 
     public Ticket updateStatus(String id, Ticket.Status newStatus, Authentication auth) {
+        return updateStatus(id, newStatus, null, null, auth);
+    }
+
+    public Ticket updateStatus(String id,
+                               Ticket.Status newStatus,
+                               String reason,
+                               String resolutionNotes,
+                               Authentication auth) {
         Ticket ticket = getTicketById(id);
         User currentUser = (User) auth.getPrincipal();
+        LocalDateTime now = LocalDateTime.now();
 
         boolean isAdmin = currentUser.getRoles().contains("ADMIN");
         boolean isAssignedTechnician = ticket.getAssignedTo() != null &&
@@ -90,7 +111,34 @@ public class TicketService {
 
         Ticket.Status oldStatus = ticket.getStatus();
         ticket.setStatus(newStatus);
-        ticket.setUpdatedAt(LocalDateTime.now());
+        ticket.setUpdatedAt(now);
+
+        switch (newStatus) {
+            case IN_PROGRESS -> {
+                if (ticket.getFirstResponseAt() == null) {
+                    ticket.setFirstResponseAt(now);
+                }
+            }
+            case RESOLVED -> {
+                ticket.setResolvedAt(now);
+                if (resolutionNotes != null && !resolutionNotes.isBlank()) {
+                    ticket.setResolutionNotes(resolutionNotes);
+                }
+            }
+            case CLOSED -> ticket.setClosedAt(now);
+            case REJECTED -> {
+                if (!isAdmin) {
+                    throw new RuntimeException("Only ADMIN can reject a ticket");
+                }
+                if (reason == null || reason.isBlank()) {
+                    throw new RuntimeException("Rejection reason is required");
+                }
+                ticket.setRejectedAt(now);
+                ticket.setRejectionReason(reason);
+            }
+            default -> {
+            }
+        }
 
         Ticket saved = ticketRepository.save(ticket);
 
@@ -294,11 +342,19 @@ public class TicketService {
             throw new RuntimeException("Cannot assign technician to a closed or rejected ticket");
         }
 
+        LocalDateTime now = LocalDateTime.now();
+
         ticket.setAssignedTo(technicianClerkId);
+        ticket.setAssignedAt(now);
+
         if (ticket.getStatus() == Ticket.Status.OPEN) {
             ticket.setStatus(Ticket.Status.IN_PROGRESS);
+            if (ticket.getFirstResponseAt() == null) {
+                ticket.setFirstResponseAt(now);
+            }
         }
-        ticket.setUpdatedAt(LocalDateTime.now());
+
+        ticket.setUpdatedAt(now);
 
         Ticket saved = ticketRepository.save(ticket);
 
@@ -328,7 +384,7 @@ public class TicketService {
         if (isAdmin) {
             return switch (current) {
                 case OPEN -> next == Ticket.Status.IN_PROGRESS || next == Ticket.Status.REJECTED;
-                case IN_PROGRESS -> next == Ticket.Status.RESOLVED;
+                case IN_PROGRESS -> next == Ticket.Status.RESOLVED || next == Ticket.Status.REJECTED;
                 case RESOLVED -> next == Ticket.Status.CLOSED;
                 default -> false;
             };
@@ -347,5 +403,18 @@ public class TicketService {
         }
 
         return false;
+    }
+
+    private LocalDateTime calculateDueAt(String priority, LocalDateTime now) {
+        if (priority == null) {
+            return now.plusDays(3);
+        }
+
+        return switch (priority.toUpperCase()) {
+            case "HIGH" -> now.plusHours(24);
+            case "MEDIUM" -> now.plusDays(3);
+            case "LOW" -> now.plusDays(7);
+            default -> now.plusDays(3);
+        };
     }
 }

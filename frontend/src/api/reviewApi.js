@@ -1,9 +1,14 @@
-import axios from "axios";
+import API from "./axios";
 
-const API = axios.create({
-  baseURL: "http://localhost:8080/api/reviews",
-});
+export const getResources = () => API.get("/resources");
 
-export const saveResourceReview = (data) => API.post("", data);
-export const getResourceReviews = (resourceId) => API.get(`/resource/${resourceId}`);
-export const getResourceReviewSummary = (resourceId) => API.get(`/resource/${resourceId}/summary`);
+export const getResourceById = (id) => API.get(`/resources/${id}`);
+
+export const createResource = (data) => API.post("/resources", data);
+
+export const updateResource = (id, data) => API.put(`/resources/${id}`, data);
+
+export const deleteResource = (id) => API.delete(`/resources/${id}`);
+
+export const searchResources = (params) =>
+  API.get("/resources/search", { params });

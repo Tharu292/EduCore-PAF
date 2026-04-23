@@ -8,8 +8,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/resources/")
-@CrossOrigin(origins = "http://localhost:5173")
+@RequestMapping("/api/resources")
 public class ResourceController {
 
     private final ResourceService service;
@@ -43,17 +42,13 @@ public class ResourceController {
         service.delete(id);
     }
 
-    // SEARCH FILTER
     @GetMapping("/search")
     public List<Resource> search(
             @RequestParam(required = false) String type,
             @RequestParam(required = false) Integer capacity,
-            @RequestParam(required = false) String location
+            @RequestParam(required = false) String location,
+            @RequestParam(required = false) String status
     ) {
-        if (type != null) return service.getAll().stream().filter(r -> r.getType().equals(type)).toList();
-        if (capacity != null) return service.getAll().stream().filter(r -> r.getCapacity() >= capacity).toList();
-        if (location != null) return service.getAll().stream().filter(r -> r.getLocation().equals(location)).toList();
-
-        return service.getAll();
+        return service.search(type, capacity, location, status);
     }
 }

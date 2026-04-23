@@ -49,8 +49,10 @@ public class TicketController {
     @PutMapping("/{id}/status")
     public Ticket updateStatus(@PathVariable String id,
                                @RequestParam Ticket.Status status,
+                               @RequestParam(required = false) String reason,
+                               @RequestParam(required = false) String resolutionNotes,
                                Authentication auth) {
-        return ticketService.updateStatus(id, status, auth);
+        return ticketService.updateStatus(id, status, reason, resolutionNotes, auth);
     }
 
     @PostMapping("/{id}/comments")

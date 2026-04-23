@@ -31,10 +31,40 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/uploads/**").permitAll()
                         .requestMatchers("/ws/**").permitAll()
-                        .requestMatchers("/api/admin/**").hasAuthority("ADMIN")
+
+                        // Disable old custom login system
+                        .requestMatchers("/api/auth/**").denyAll()
+
+                        // User/admin APIs
                         .requestMatchers("/api/users/me").authenticated()
+                        .requestMatchers("/api/users/by-clerk/**").authenticated()
+                        .requestMatchers("/api/admin/**").hasAuthority("ADMIN")
+
+                        // Notifications
                         .requestMatchers("/api/notifications/**").authenticated()
+
+                        // Tickets
                         .requestMatchers("/api/tickets/**").authenticated()
+
+                        // Resources
+                        .requestMatchers(HttpMethod.GET, "/api/resources/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/resources/**").hasAuthority("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/resources/**").hasAuthority("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/resources/**").hasAuthority("ADMIN")
+
+                        // Reviews
+                        .requestMatchers("/api/reviews/**").authenticated()
+
+                        // Bookings
+                        .requestMatchers(HttpMethod.GET, "/api/bookings").hasAuthority("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/bookings/me").hasAuthority("USER")
+                        .requestMatchers(HttpMethod.GET, "/api/bookings/resource/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/bookings/**").hasAuthority("USER")
+                        .requestMatchers(HttpMethod.PUT, "/api/bookings/*/approve").hasAuthority("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/bookings/*/reject").hasAuthority("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/bookings/*/cancel").hasAuthority("USER")
+                        .requestMatchers(HttpMethod.PUT, "/api/bookings/*/reschedule").hasAuthority("USER")
+
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)

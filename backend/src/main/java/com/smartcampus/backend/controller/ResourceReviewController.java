@@ -3,6 +3,7 @@ package com.smartcampus.backend.controller;
 import com.smartcampus.backend.model.ResourceReview;
 import com.smartcampus.backend.service.ResourceReviewService;
 import jakarta.validation.Valid;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -10,7 +11,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/reviews")
-@CrossOrigin(origins = "http://localhost:5173")
 public class ResourceReviewController {
 
     private final ResourceReviewService reviewService;
@@ -20,8 +20,8 @@ public class ResourceReviewController {
     }
 
     @PostMapping
-    public ResourceReview save(@Valid @RequestBody ResourceReview review) {
-        return reviewService.save(review);
+    public ResourceReview save(@Valid @RequestBody ResourceReview review, Authentication auth) {
+        return reviewService.save(review, auth);
     }
 
     @GetMapping("/resource/{resourceId}")

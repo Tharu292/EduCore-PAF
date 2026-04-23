@@ -21,18 +21,29 @@ public class Ticket {
     private String description;
     private String category;
     private String priority;
-    private String location;           // Added - useful for campus resources
-    private String preferredContact;   // Added
+    private String location;
+    private String preferredContact;
 
     private Status status = Status.OPEN;
     private String createdBy;
     private String assignedTo;
+
+    private String rejectionReason;
+    private String resolutionNotes;
 
     private List<Comment> comments;
     private List<String> attachments;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    private LocalDateTime assignedAt;
+    private LocalDateTime resolvedAt;
+    private LocalDateTime closedAt;
+    private LocalDateTime rejectedAt;
+
+    private LocalDateTime firstResponseAt;
+    private LocalDateTime dueAt;
 
     public enum Status {
         OPEN, IN_PROGRESS, RESOLVED, CLOSED, REJECTED

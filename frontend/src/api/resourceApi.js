@@ -1,13 +1,14 @@
-import axios from "axios";
+import API from "./axios";
 
-const API = axios.create({
-  baseURL: "http://localhost:8080/api/resources",
-});
+export const getResources = () => API.get("/resources");
 
-export const getResources = () => API.get("/");
-export const createResource = (data) => API.post("/", data);
-export const deleteResource = (id) => API.delete(`/${id}`);
-export const updateResource = (id, data) => API.put(`/${id}`, data);
+export const getResourceById = (id) => API.get(`/resources/${id}`);
 
-// OPTIONAL: backend search endpoint (if you add later)
-export const searchResources = (params) => API.get("search", { params });
+export const createResource = (data) => API.post("/resources", data);
+
+export const updateResource = (id, data) => API.put(`/resources/${id}`, data);
+
+export const deleteResource = (id) => API.delete(`/resources/${id}`);
+
+export const searchResources = (params) =>
+  API.get("/resources/search", { params });

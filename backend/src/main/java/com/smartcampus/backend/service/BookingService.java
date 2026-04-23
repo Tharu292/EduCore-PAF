@@ -2,8 +2,10 @@ package com.smartcampus.backend.service;
 
 import com.smartcampus.backend.model.Booking;
 import com.smartcampus.backend.model.Resource;
+import com.smartcampus.backend.model.User;
 import com.smartcampus.backend.repository.BookingRepository;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -17,22 +19,26 @@ public class BookingService {
 
     private final BookingRepository bookingRepository;
     private final ResourceService resourceService;
-    private final BookingNotificationService notificationService;
+    private final BookingNotificationService bookingNotificationService;
+    private final NotificationService notificationService;
 
     public BookingService(
             BookingRepository bookingRepository,
             ResourceService resourceService,
-            BookingNotificationService notificationService
+            BookingNotificationService bookingNotificationService,
+            NotificationService notificationService
     ) {
         this.bookingRepository = bookingRepository;
         this.resourceService = resourceService;
+        this.bookingNotificationService = bookingNotificationService;
         this.notificationService = notificationService;
     }
 
-    public Booking create(Booking booking) {
+    public Booking create(Booking booking, Authentication auth) {
+        User currentUser = (User) auth.getPrincipal();
         Resource resource = resourceService.getById(booking.getResourceId());
 
-        if (!"ACTIVE".equals(resource.getStatus())) {
+        if (!"ACTIVE".equalsIgnoreCase(resource.getStatus())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Resource is not available for booking");
         }
 
@@ -48,56 +54,106 @@ public class BookingService {
 
         ensureCapacityAvailable(booking, resource, List.of("PENDING", "APPROVED"), null);
 
+        booking.setStudentId(currentUser.getClerkUserId());
+        booking.setStudentName(currentUser.getName());
+        booking.setStudentEmail(currentUser.getEmail());
+
         booking.setResourceName(resource.getName());
         booking.setResourceType(resource.getType());
         booking.setResourceLocation(resource.getLocation());
         booking.setStatus("PENDING");
         booking.setAdminReason(null);
         booking.setCreatedAt(LocalDateTime.now());
+        booking.setReviewedAt(null);
 
-        return bookingRepository.save(booking);
+        Booking saved = bookingRepository.save(booking);
+
+        notificationService.create(
+                currentUser.getClerkUserId(),
+                "Your booking request for '" + resource.getName() + "' has been submitted and is pending review."
+        );
+
+        return saved;
     }
 
     public List<Booking> getAll(String status) {
         if (status != null && !status.isBlank()) {
-            return bookingRepository.findByStatusOrderByBookingDateAscStartTimeAsc(status);
+            return bookingRepository.findByStatusOrderByBookingDateAscStartTimeAsc(status.toUpperCase());
         }
         return bookingRepository.findAll();
     }
 
-    public List<Booking> getByStudent(String studentId) {
-        return bookingRepository.findByStudentIdOrderByBookingDateDescStartTimeAsc(studentId);
+    public List<Booking> getMine(Authentication auth) {
+        User currentUser = (User) auth.getPrincipal();
+        return bookingRepository.findByStudentIdOrderByBookingDateDescStartTimeAsc(currentUser.getClerkUserId());
     }
 
     public List<Booking> getByResource(String resourceId) {
         return bookingRepository.findByResourceIdOrderByBookingDateAscStartTimeAsc(resourceId);
     }
 
-    public Booking approve(String id, String reason) {
+    public Booking approve(String id, String reason, Authentication auth) {
+        User currentUser = (User) auth.getPrincipal();
+        requireAdmin(currentUser);
+
         Booking booking = getById(id);
         Resource resource = resourceService.getById(booking.getResourceId());
+
+        if (!"PENDING".equalsIgnoreCase(booking.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only pending bookings can be approved");
+        }
+
         ensureCapacityAvailable(booking, resource, List.of("APPROVED"), booking.getId());
+
         booking.setStatus("APPROVED");
-        booking.setAdminReason(reason);
+        booking.setAdminReason(reason == null ? "" : reason);
         booking.setReviewedAt(LocalDateTime.now());
+
         Booking saved = bookingRepository.save(booking);
-        notificationService.sendApprovalEmail(saved);
+
+        bookingNotificationService.sendApprovalEmail(saved);
+        notificationService.create(
+                booking.getStudentId(),
+                "Your booking for '" + booking.getResourceName() + "' has been approved."
+        );
+
         return saved;
     }
 
-    public Booking reject(String id, String reason) {
+    public Booking reject(String id, String reason, Authentication auth) {
+        User currentUser = (User) auth.getPrincipal();
+        requireAdmin(currentUser);
+
         Booking booking = getById(id);
+
+        if (!"PENDING".equalsIgnoreCase(booking.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only pending bookings can be rejected");
+        }
+
         booking.setStatus("REJECTED");
-        booking.setAdminReason(reason);
+        booking.setAdminReason(reason == null ? "" : reason);
         booking.setReviewedAt(LocalDateTime.now());
+
         Booking saved = bookingRepository.save(booking);
-        notificationService.sendRejectionEmail(saved);
+
+        bookingNotificationService.sendRejectionEmail(saved);
+        notificationService.create(
+                booking.getStudentId(),
+                "Your booking for '" + booking.getResourceName() + "' has been rejected."
+        );
+
         return saved;
     }
 
-    public Booking cancel(String id) {
+    public Booking cancel(String id, Authentication auth) {
+        User currentUser = (User) auth.getPrincipal();
         Booking booking = getById(id);
-        if (!"APPROVED".equals(booking.getStatus())) {
+
+        if (!booking.getStudentId().equals(currentUser.getClerkUserId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only cancel your own bookings");
+        }
+
+        if (!"APPROVED".equalsIgnoreCase(booking.getStatus())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only approved bookings can be cancelled");
         }
 
@@ -108,14 +164,32 @@ public class BookingService {
 
         booking.setStatus("CANCELLED");
         booking.setReviewedAt(LocalDateTime.now());
-        return bookingRepository.save(booking);
+
+        Booking saved = bookingRepository.save(booking);
+
+        notificationService.create(
+                booking.getStudentId(),
+                "Your booking for '" + booking.getResourceName() + "' has been cancelled."
+        );
+
+        return saved;
     }
 
-    public Booking reschedule(String id, LocalDate bookingDate, LocalTime startTime, LocalTime endTime, int expectedAttendees) {
+    public Booking reschedule(String id,
+                              LocalDate bookingDate,
+                              LocalTime startTime,
+                              LocalTime endTime,
+                              int expectedAttendees,
+                              Authentication auth) {
+        User currentUser = (User) auth.getPrincipal();
         Booking booking = getById(id);
 
-        if (!List.of("PENDING", "APPROVED").contains(booking.getStatus())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only pending or booked reservations can be rescheduled");
+        if (!booking.getStudentId().equals(currentUser.getClerkUserId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only reschedule your own bookings");
+        }
+
+        if (!List.of("PENDING", "APPROVED").contains(booking.getStatus().toUpperCase())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only pending or approved bookings can be rescheduled");
         }
 
         Resource resource = resourceService.getById(booking.getResourceId());
@@ -141,12 +215,25 @@ public class BookingService {
         booking.setAdminReason("Reschedule requested");
         booking.setReviewedAt(null);
 
-        return bookingRepository.save(booking);
+        Booking saved = bookingRepository.save(booking);
+
+        notificationService.create(
+                booking.getStudentId(),
+                "Your booking for '" + booking.getResourceName() + "' was rescheduled and is pending admin review."
+        );
+
+        return saved;
     }
 
     private Booking getById(String id) {
         return bookingRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
+    }
+
+    private void requireAdmin(User user) {
+        if (user.getRoles() == null || !user.getRoles().contains("ADMIN")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only admins can perform this action");
+        }
     }
 
     private void ensureCapacityAvailable(Booking booking, Resource resource, List<String> statuses, String ignoredBookingId) {

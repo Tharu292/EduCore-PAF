@@ -3,14 +3,30 @@ import API from "../api/axios";
 export const createTicket = (data) => API.post("/tickets", data);
 export const getAllTickets = () => API.get("/tickets");
 export const getTicketById = (id) => API.get(`/tickets/${id}`);
-export const getMyTickets = (clerkUserId) => API.get(`/tickets/user/${clerkUserId}`);
-export const getTechnicianTickets = (clerkUserId) => API.get(`/tickets/technician/${clerkUserId}`);
 
-export const updateStatus = (id, status) =>
-  API.put(`/tickets/${id}/status?status=${status}`);
+export const getUserTickets = (clerkUserId) =>
+  API.get(`/tickets/user/${clerkUserId}`);
+
+// optional alias so old imports don't break immediately
+export const getMyTickets = getUserTickets;
+
+export const getTechnicianTickets = (clerkUserId) =>
+  API.get(`/tickets/technician/${clerkUserId}`);
+
+export const updateStatus = (
+  id,
+  status,
+  reason = "",
+  resolutionNotes = ""
+) =>
+  API.put(`/tickets/${id}/status`, null, {
+    params: { status, reason, resolutionNotes },
+  });
 
 export const assignTechnician = (ticketId, technicianClerkId) =>
-  API.post(`/tickets/${ticketId}/assign?technicianClerkId=${technicianClerkId}`);
+  API.post(`/tickets/${ticketId}/assign`, null, {
+    params: { technicianClerkId },
+  });
 
 export const addComment = (ticketId, commentData) =>
   API.post(`/tickets/${ticketId}/comments`, commentData);

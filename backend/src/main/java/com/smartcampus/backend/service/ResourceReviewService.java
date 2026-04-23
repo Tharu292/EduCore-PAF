@@ -2,7 +2,9 @@ package com.smartcampus.backend.service;
 
 import com.smartcampus.backend.model.Resource;
 import com.smartcampus.backend.model.ResourceReview;
+import com.smartcampus.backend.model.User;
 import com.smartcampus.backend.repository.ResourceReviewRepository;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -20,17 +22,18 @@ public class ResourceReviewService {
         this.resourceService = resourceService;
     }
 
-    public ResourceReview save(ResourceReview review) {
+    public ResourceReview save(ResourceReview review, Authentication auth) {
+        User currentUser = (User) auth.getPrincipal();
         Resource resource = resourceService.getById(review.getResourceId());
 
         ResourceReview target = reviewRepository
-                .findByResourceIdAndStudentId(review.getResourceId(), review.getStudentId())
+                .findByResourceIdAndStudentId(review.getResourceId(), currentUser.getClerkUserId())
                 .orElseGet(ResourceReview::new);
 
         target.setResourceId(review.getResourceId());
         target.setResourceName(resource.getName());
-        target.setStudentId(review.getStudentId());
-        target.setStudentName(review.getStudentName());
+        target.setStudentId(currentUser.getClerkUserId());
+        target.setStudentName(currentUser.getName());
         target.setRating(review.getRating());
         target.setComment(review.getComment());
         target.setUpdatedAt(LocalDateTime.now());

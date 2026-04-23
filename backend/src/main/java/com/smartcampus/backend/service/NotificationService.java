@@ -2,7 +2,6 @@ package com.smartcampus.backend.service;
 
 import com.smartcampus.backend.model.Notification;
 import com.smartcampus.backend.repository.NotificationRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -10,8 +9,11 @@ import java.util.List;
 @Service
 public class NotificationService {
 
-    @Autowired
-    private NotificationRepository notificationRepository;
+    private final NotificationRepository notificationRepository;
+
+    public NotificationService(NotificationRepository notificationRepository) {
+        this.notificationRepository = notificationRepository;
+    }
 
     public Notification create(String clerkUserId, String message) {
         Notification notification = new Notification(clerkUserId, message);

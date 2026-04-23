@@ -44,4 +44,13 @@ public class ResourceService {
     public void delete(String id) {
         repo.deleteById(id);
     }
+
+    public List<Resource> search(String type, Integer capacity, String location, String status) {
+        return repo.findAll().stream()
+                .filter(r -> type == null || type.isBlank() || r.getType().equalsIgnoreCase(type))
+                .filter(r -> capacity == null || r.getCapacity() >= capacity)
+                .filter(r -> location == null || location.isBlank() || r.getLocation().equalsIgnoreCase(location))
+                .filter(r -> status == null || status.isBlank() || r.getStatus().equalsIgnoreCase(status))
+                .toList();
+    }
 }

@@ -1,13 +1,17 @@
-import React, { useState, useEffect } from "react";
-import { Users, Ticket } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Users, Ticket, BarChart3 } from "lucide-react";
 import API from "../api/axios";
-import Toast from "../components/Toast";
 import AppLayout from "../components/AppLayout";
+import Toast from "../components/Toast";
+import Analytics from "../components/Analytics";
+import { getResources } from "../api/resourceApi";
+import { assignTechnician } from "../services/ticketService";
 
 export default function AdminPanel() {
   const [users, setUsers] = useState([]);
   const [tickets, setTickets] = useState([]);
-  const [activeTab, setActiveTab] = useState("users");
+  const [resources, setResources] = useState([]);
+  const [activeTab, setActiveTab] = useState("analytics");
   const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -18,14 +22,17 @@ export default function AdminPanel() {
 
   const fetchData = async () => {
     try {
-      const [usersRes, ticketsRes] = await Promise.all([
+      const [usersRes, ticketsRes, resourcesRes] = await Promise.all([
         API.get("/admin/users"),
-        API.get("/tickets")
+        API.get("/tickets"),
+        getResources(),
       ]);
+
       setUsers(usersRes.data || []);
       setTickets(ticketsRes.data || []);
+      setResources(resourcesRes.data || []);
     } catch (err) {
-      showToast("Failed to load data", "error");
+      showToast("Failed to load admin data", "error");
     } finally {
       setLoading(false);
     }
@@ -38,71 +45,112 @@ export default function AdminPanel() {
   const updateUserRole = async (userId, newRole) => {
     try {
       await API.put(`/admin/users/${userId}/roles`, [newRole, "USER"]);
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.id === userId ? { ...u, roles: [newRole, "USER"] } : u
-        )
-      );
       showToast(`Role updated to ${newRole}`, "success");
+      fetchData();
     } catch (err) {
       showToast(err.response?.data?.error || "Failed to update role", "error");
     }
   };
 
-  const assignTechnician = async (ticketId, technicianClerkId) => {
+  const handleAssignTechnician = async (ticketId, technicianClerkId) => {
     if (!technicianClerkId) return;
+
     try {
-      await API.post(`/tickets/${ticketId}/assign?technicianClerkId=${technicianClerkId}`);
+      await assignTechnician(ticketId, technicianClerkId);
       showToast("Technician assigned successfully", "success");
       fetchData();
     } catch (err) {
-      showToast(err.response?.data?.error || "Failed to assign technician", "error");
+      showToast(
+        err.response?.data?.error || "Failed to assign technician",
+        "error"
+      );
     }
   };
 
+  const technicians = users.filter((u) => u.roles?.includes("TECHNICIAN"));
+
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading Admin Dashboard...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        Loading Admin Dashboard...
+      </div>
+    );
   }
 
   return (
     <AppLayout>
-      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
 
       <div className="mb-8">
         <h1 className="text-4xl font-bold text-gray-900">Admin Dashboard</h1>
-        <p className="text-gray-500 mt-1">Manage users and all maintenance tickets</p>
+        <p className="text-gray-500 mt-1">
+          Manage users, bookings, resources, and all maintenance tickets
+        </p>
       </div>
 
-      <div className="flex gap-4 mb-8 border-b">
+      <div className="flex flex-wrap gap-4 mb-8 border-b">
+        <button
+          onClick={() => setActiveTab("analytics")}
+          className={`pb-4 px-4 font-medium text-lg transition-all ${
+            activeTab === "analytics"
+              ? "border-b-4 border-blue-600 text-blue-600"
+              : "text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          <span className="inline-flex items-center gap-2">
+            <BarChart3 size={20} />
+            Analytics
+          </span>
+        </button>
+
         <button
           onClick={() => setActiveTab("users")}
-          className={`pb-4 px-8 font-medium text-lg transition-all ${
+          className={`pb-4 px-4 font-medium text-lg transition-all ${
             activeTab === "users"
               ? "border-b-4 border-blue-600 text-blue-600"
               : "text-gray-500 hover:text-gray-700"
           }`}
         >
-          👥 Users Management
+          <span className="inline-flex items-center gap-2">
+            <Users size={20} />
+            Users
+          </span>
         </button>
+
         <button
           onClick={() => setActiveTab("tickets")}
-          className={`pb-4 px-8 font-medium text-lg transition-all ${
+          className={`pb-4 px-4 font-medium text-lg transition-all ${
             activeTab === "tickets"
               ? "border-b-4 border-blue-600 text-blue-600"
               : "text-gray-500 hover:text-gray-700"
           }`}
         >
-          🎟️ All Tickets
+          <span className="inline-flex items-center gap-2">
+            <Ticket size={20} />
+            Tickets
+          </span>
         </button>
       </div>
 
+      {activeTab === "analytics" && (
+        <Analytics resources={resources} bookings={tickets.map((t) => ({
+          resourceName: t.location || t.title || "Unknown",
+          startTime: t.createdAt ? new Date(t.createdAt).toTimeString().slice(0, 5) : null,
+        }))} />
+      )}
+
       {activeTab === "users" && (
         <div className="bg-white rounded-3xl shadow p-8">
-          <h2 className="text-2xl font-semibold mb-6 flex items-center gap-3">
-            <Users size={28} /> All Users
-          </h2>
+          <h2 className="text-2xl font-semibold mb-6">All Users</h2>
+
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[850px]">
               <thead>
                 <tr className="bg-gray-50">
                   <th className="px-6 py-4 text-left">User</th>
@@ -114,14 +162,17 @@ export default function AdminPanel() {
               <tbody className="divide-y">
                 {users.map((u) => (
                   <tr key={u.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-5">
-                      <div className="font-medium">{u.name || "Unnamed User"}</div>
+                    <td className="px-6 py-5 font-medium">
+                      {u.name || "Unnamed User"}
                     </td>
                     <td className="px-6 py-5 text-gray-600">{u.email}</td>
                     <td className="px-6 py-5">
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap">
                         {u.roles?.map((role) => (
-                          <span key={role} className="px-4 py-1 text-xs rounded-full bg-blue-100 text-blue-700">
+                          <span
+                            key={role}
+                            className="px-3 py-1 text-xs rounded-full bg-blue-100 text-blue-700"
+                          >
                             {role}
                           </span>
                         ))}
@@ -133,7 +184,9 @@ export default function AdminPanel() {
                         onChange={(e) => updateUserRole(u.id, e.target.value)}
                         className="border border-gray-300 rounded-xl px-4 py-2 text-sm"
                       >
-                        <option value="" disabled>Select role</option>
+                        <option value="" disabled>
+                          Select role
+                        </option>
                         <option value="USER">USER</option>
                         <option value="TECHNICIAN">TECHNICIAN</option>
                         <option value="ADMIN">ADMIN</option>
@@ -149,46 +202,42 @@ export default function AdminPanel() {
 
       {activeTab === "tickets" && (
         <div className="bg-white rounded-3xl shadow p-8">
-          <h2 className="text-2xl font-semibold mb-6 flex items-center gap-3">
-            <Ticket size={28} /> All Tickets ({tickets.length})
+          <h2 className="text-2xl font-semibold mb-6">
+            All Tickets ({tickets.length})
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {tickets.map((ticket) => (
-              <div key={ticket.id} className="border border-gray-200 rounded-3xl p-6 hover:shadow-md transition">
-                <div className="flex justify-between items-start mb-4">
-                  <h3 className="font-semibold text-lg line-clamp-2">{ticket.title}</h3>
-                  <span className="text-xs px-3 py-1 bg-blue-100 text-blue-700 rounded-full">
-                    {ticket.status}
-                  </span>
-                </div>
+              <div
+                key={ticket.id}
+                className="border border-gray-200 rounded-3xl p-6 hover:shadow-md transition"
+              >
+                <h3 className="font-semibold text-lg mb-2">{ticket.title}</h3>
+                <p className="text-sm text-gray-500 mb-2">
+                  {ticket.category} • {ticket.priority}
+                </p>
+                <p className="text-sm text-gray-700 mb-4 line-clamp-3">
+                  {ticket.description}
+                </p>
+                <p className="text-sm mb-2">Status: {ticket.status}</p>
+                <p className="text-sm mb-4">
+                  Assigned: {ticket.assignedTo || "Not assigned"}
+                </p>
 
-                <p className="text-gray-600 text-sm mb-4 line-clamp-2">{ticket.description}</p>
-
-                <div className="text-xs text-gray-500 space-y-1">
-                  <div>Location: {ticket.location}</div>
-                  <div>Created By: {ticket.createdBy}</div>
-                  {ticket.assignedTo && <div>Assigned To: {ticket.assignedTo}</div>}
-                </div>
-
-                {!ticket.assignedTo && (
-                  <div className="mt-5">
-                    <select
-                      defaultValue=""
-                      onChange={(e) => assignTechnician(ticket.id, e.target.value)}
-                      className="w-full border border-gray-300 rounded-2xl px-4 py-2.5 text-sm"
-                    >
-                      <option value="" disabled>Assign Technician...</option>
-                      {users
-                        .filter((u) => u.roles?.includes("TECHNICIAN"))
-                        .map((u) => (
-                          <option key={u.clerkUserId} value={u.clerkUserId}>
-                            {u.name || u.email}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                )}
+                <select
+                  defaultValue=""
+                  onChange={(e) =>
+                    handleAssignTechnician(ticket.id, e.target.value)
+                  }
+                  className="w-full border border-gray-300 rounded-xl px-4 py-2 text-sm"
+                >
+                  <option value="">Assign Technician</option>
+                  {technicians.map((tech) => (
+                    <option key={tech.id} value={tech.clerkUserId}>
+                      {tech.name || tech.email}
+                    </option>
+                  ))}
+                </select>
               </div>
             ))}
           </div>
