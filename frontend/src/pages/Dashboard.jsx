@@ -1,182 +1,238 @@
-import React, { useEffect } from "react";
-import { useClerk, useUser, UserButton, useAuth } from "@clerk/clerk-react";
-import { Ticket, AlertCircle, CheckCircle, Plus, LayoutList, ShieldAlert, LogOut } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { useUser, useClerk } from "@clerk/clerk-react";
+import { Ticket, AlertCircle, CheckCircle, Plus, LogOut, Bell } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+
+import AppLayout from "../components/AppLayout";
+import TicketCard from "../components/TicketCard";
 import NotificationPanel from "../components/NotificationPanel";
-import Sidebar from "../components/Sidebar";
-import API from "../api/axios";
+import { getMyTickets, getAllTickets, getTechnicianTickets } from "../services/ticketService";
+import useCurrentUserRole from "../hooks/useCurrentUserRole";
 
 export default function Dashboard() {
   const { signOut } = useClerk();
-  // Extract isLoaded to prevent UI flickering before Clerk initializes
   const { user, isLoaded } = useUser();
-  const { getToken } = useAuth();
+  const navigate = useNavigate();
+  const { role: userRole } = useCurrentUserRole();
 
-  const userRole = user?.publicMetadata?.role || "USER";
+  const [myTickets, setMyTickets] = useState([]);
+  const [allTickets, setAllTickets] = useState([]);
+  const [techTickets, setTechTickets] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // System Synchronization: Ping backend to ensure the user is registered in MongoDB
   useEffect(() => {
-    const syncUserWithBackend = async () => {
+    const fetchTickets = async () => {
+      if (!user?.id) return;
+
+      setLoading(true);
       try {
-        const token = await getToken();
-        
-        if (token) {
-          // Sending a request to a known endpoint to trigger the JwtAuthFilter.
-          // A 403 error might occur for standard users, which is completely expected and acceptable.
-          // The primary goal is just to hit the backend so the user is saved to the database.
-          await API.get("/admin/users", {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          console.log("✅ System Check: User synchronized with backend successfully.");
+        const requests = [getAllTickets()];
+
+        if (userRole === "USER") requests.unshift(getMyTickets(user.id));
+        if (userRole === "TECHNICIAN") requests.unshift(getTechnicianTickets(user.id));
+
+        const responses = await Promise.all(requests);
+
+        if (userRole === "USER") {
+          setMyTickets(responses[0].data || []);
+          setAllTickets(responses[1].data || []);
+        } else if (userRole === "TECHNICIAN") {
+          setTechTickets(responses[0].data || []);
+          setAllTickets(responses[1].data || []);
+        } else {
+          setAllTickets(responses[0].data || []);
         }
       } catch (err) {
-        console.log("✅ System Check: Backend connection verified.");
+        console.error("Failed to load tickets:", err);
+      } finally {
+        setLoading(false);
       }
     };
 
-    // Only attempt sync if Clerk has finished loading the user data
-    if (isLoaded && user) {
-      syncUserWithBackend();
+    if (isLoaded && user?.id && userRole) {
+      fetchTickets();
     }
-  }, [getToken, isLoaded, user]);
+  }, [isLoaded, user?.id, userRole]);
 
-  // Display a professional loading state while Clerk is initializing
   if (!isLoaded) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-pulse flex flex-col items-center">
-          <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
-          <p className="text-gray-500 font-medium">Loading workspace...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <p className="text-gray-500">Loading dashboard...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex font-sans text-gray-900">
-      <Sidebar />
-
-      {/* Main Content Area */}
-      <main className="flex-1 p-8 max-w-7xl mx-auto">
-
-        {/* Top Navigation Bar */}
-        <header className="flex items-center justify-between mb-8 bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">
-              Welcome back, {user?.firstName || "User"}
+    <AppLayout>
+      {/* Smaller Gradient Welcome Banner */}
+      <div className="relative mb-8 overflow-hidden rounded-3xl">
+        <div 
+          className="h-32 md:h-40 flex items-center px-8 md:px-10 bg-gradient-to-r from-[#e31836] to-[#006591]"
+          style={{
+            background: 'linear-gradient(135deg, #e31836 0%, #006591 100%)'
+          }}
+        >
+          <div className="flex-1">
+            <h1 className="text-white text-2xl md:text-3xl font-semibold tracking-tight">
+              Welcome back, {user?.firstName || "User"}!
             </h1>
-            <div className="flex items-center gap-2 mt-1 text-sm text-gray-500">
-              <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                userRole === 'ADMIN' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-gray-100 text-gray-700 border border-gray-200'
-              }`}>
-                {userRole}
-              </span>
-              <span>•</span>
-              <span>Smart Campus Management</span>
-            </div>
+            <p className="text-white/90 text-sm md:text-base mt-1">
+              Here&apos;s what&apos;s happening with your workspace
+            </p>
           </div>
 
-          <div className="flex items-center gap-5">
-            <button
-              onClick={() => signOut({ redirectUrl: "/login" })}
-              className="hidden sm:flex items-center gap-2 text-gray-500 hover:text-red-600 transition-colors duration-200 font-medium text-sm"
-            >
-              <LogOut className="w-4 h-4" />
-              Sign Out
-            </button>
-            <div className="h-8 w-px bg-gray-200 hidden sm:block"></div>
-            <UserButton 
-              afterSignOutUrl="/login" 
-              appearance={{
-                elements: { avatarBox: "w-10 h-10 border-2 border-gray-100 shadow-sm" }
-              }}
-            />
-          </div>
-        </header>
+          {/* Logout Button */}
+          <button
+            onClick={() => signOut({ redirectUrl: "/login" })}
+            className="flex items-center gap-2 px-5 py-2.5 bg-white/10 hover:bg-white/20 
+                       backdrop-blur-md text-white rounded-2xl transition-all border border-white/20 
+                       text-sm whitespace-nowrap"
+          >
+            <LogOut size={17} />
+            Logout
+          </button>
+        </div>
+      </div>
 
-        {/* Key Metrics / Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {/* Card 1 */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200 group">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-sm font-medium text-gray-500 mb-1">Total Tickets</p>
-                <h3 className="text-3xl font-bold text-gray-900">24</h3>
+      {/* Rest of your dashboard */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        {userRole === "USER" && (
+          <StatCard title="My Tickets" value={myTickets.length} icon={<Ticket className="text-blue-600" />} />
+        )}
+        {userRole === "TECHNICIAN" && (
+          <StatCard title="Assigned To Me" value={techTickets.length} icon={<Ticket className="text-amber-600" />} />
+        )}
+        <StatCard title="Open Tickets" value={allTickets.filter(t => t.status === "OPEN").length} icon={<AlertCircle className="text-amber-600" />} />
+        <StatCard title="Resolved" value={allTickets.filter(t => t.status === "RESOLVED").length} icon={<CheckCircle className="text-green-600" />} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="lg:col-span-8 space-y-10">
+          {userRole === "USER" && (
+            <div>
+              <div className="flex justify-between items-center mb-5">
+                <h2 className="text-xl font-semibold">My Recent Tickets</h2>
+                <button
+                  onClick={() => navigate("/my-tickets")}
+                  className="text-blue-600 hover:underline text-sm font-medium"
+                >
+                  View All →
+                </button>
               </div>
-              <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
-                <Ticket className="w-6 h-6" />
+              {loading ? (
+                <p className="text-gray-500">Loading your tickets...</p>
+              ) : myTickets.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {myTickets.slice(0, 4).map((ticket) => (
+                    <TicketCard key={ticket.id} ticket={ticket} onClick={() => navigate(`/ticket/${ticket.id}`)} />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500">You haven&apos;t created any tickets yet.</p>
+              )}
+            </div>
+          )}
+
+          {userRole === "TECHNICIAN" && (
+            <div>
+              <div className="flex justify-between items-center mb-5">
+                <h2 className="text-xl font-semibold">Assigned Tickets</h2>
+                <button
+                  onClick={() => navigate("/technician")}
+                  className="text-blue-600 hover:underline text-sm font-medium"
+                >
+                  View All →
+                </button>
+              </div>
+              {loading ? (
+                <p className="text-gray-500">Loading assigned tickets...</p>
+              ) : techTickets.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {techTickets.slice(0, 4).map((ticket) => (
+                    <TicketCard key={ticket.id} ticket={ticket} onClick={() => navigate(`/ticket/${ticket.id}`)} />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500">No tickets assigned to you yet.</p>
+              )}
+            </div>
+          )}
+
+          {(userRole === "ADMIN" || userRole === "USER" || userRole === "TECHNICIAN") && (
+            <div>
+              <h2 className="text-xl font-semibold mb-5">Open Tickets (Campus Wide)</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {allTickets
+                  .filter(t => t.status === "OPEN" || t.status === "IN_PROGRESS")
+                  .slice(0, 6)
+                  .map((ticket) => (
+                    <TicketCard key={ticket.id} ticket={ticket} onClick={() => navigate(`/ticket/${ticket.id}`)} />
+                  ))}
               </div>
             </div>
-          </div>
-
-          {/* Card 2 */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200 group">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-sm font-medium text-gray-500 mb-1">Open Issues</p>
-                <h3 className="text-3xl font-bold text-gray-900">8</h3>
-              </div>
-              <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center group-hover:bg-amber-500 group-hover:text-white transition-colors duration-300">
-                <AlertCircle className="w-6 h-6" />
-              </div>
-            </div>
-          </div>
-
-          {/* Card 3 */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200 group">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-sm font-medium text-gray-500 mb-1">Resolved</p>
-                <h3 className="text-3xl font-bold text-gray-900">16</h3>
-              </div>
-              <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition-colors duration-300">
-                <CheckCircle className="w-6 h-6" />
-              </div>
-            </div>
-          </div>
+          )}
         </div>
 
-        {/* Main Dashboard Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-          {/* Notifications Column */}
-          <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-bold text-gray-800">Recent Notifications</h2>
-              <span className="text-xs font-semibold bg-blue-50 text-blue-600 px-2.5 py-1 rounded-full">New</span>
-            </div>
+        <div className="lg:col-span-4 space-y-8">
+          <div className="bg-white rounded-3xl shadow p-6">
+            <h2 className="font-semibold text-lg mb-5 flex items-center gap-2">
+              <Bell size={20} /> Recent Notifications
+            </h2>
             <NotificationPanel />
           </div>
 
-          {/* Quick Actions Column */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 h-fit">
-            <h2 className="text-lg font-bold text-gray-800 mb-6">Quick Actions</h2>
-
+          <div className="bg-white rounded-3xl shadow p-6">
+            <h2 className="font-semibold text-lg mb-5">Quick Actions</h2>
             <div className="space-y-3">
-              <button className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white font-medium py-2.5 rounded-xl hover:bg-blue-700 active:transform active:scale-95 transition-all duration-200 shadow-sm hover:shadow">
-                <Plus className="w-4 h-4" />
-                Create Ticket
-              </button>
-
-              <button className="w-full flex items-center justify-center gap-2 bg-white border border-gray-200 text-gray-700 font-medium py-2.5 rounded-xl hover:bg-gray-50 hover:border-gray-300 active:transform active:scale-95 transition-all duration-200">
-                <LayoutList className="w-4 h-4" />
-                My Tickets
-              </button>
-
-              {/* Conditional Rendering: Exclusive to Admins */}
-              {userRole === "ADMIN" && (
-                <div className="pt-4 mt-2 border-t border-gray-100">
-                  <button className="w-full flex items-center justify-center gap-2 bg-indigo-50 text-indigo-700 border border-indigo-100 font-medium py-2.5 rounded-xl hover:bg-indigo-600 hover:text-white hover:border-transparent active:transform active:scale-95 transition-all duration-300">
-                    <ShieldAlert className="w-4 h-4" />
-                    Technician Panel
+              {userRole === "USER" && (
+                <>
+                  <button
+                    onClick={() => navigate("/create")}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-2xl font-medium flex items-center justify-center gap-2 transition"
+                  >
+                    <Plus size={20} /> Create New Ticket
                   </button>
-                </div>
+
+                  <button
+                    onClick={() => navigate("/my-tickets")}
+                    className="w-full border border-gray-300 hover:bg-gray-50 py-4 rounded-2xl font-medium transition"
+                  >
+                    View My Tickets
+                  </button>
+                </>
+              )}
+
+              {userRole === "TECHNICIAN" && (
+                <button
+                  onClick={() => navigate("/technician")}
+                  className="w-full bg-amber-100 hover:bg-amber-200 text-amber-700 py-4 rounded-2xl font-medium transition"
+                >
+                  Go to Technician Dashboard
+                </button>
+              )}
+
+              {userRole === "ADMIN" && (
+                <button
+                  onClick={() => navigate("/admin")}
+                  className="w-full bg-indigo-100 hover:bg-indigo-200 text-indigo-700 py-4 rounded-2xl font-medium transition"
+                >
+                  Go to Admin Dashboard
+                </button>
               )}
             </div>
           </div>
-
         </div>
-
-      </main>
-    </div>
+      </div>
+    </AppLayout>
   );
 }
+
+const StatCard = ({ title, value, icon }) => (
+  <div className="bg-white p-6 rounded-3xl shadow flex items-center justify-between">
+    <div>
+      <p className="text-sm text-gray-500">{title}</p>
+      <p className="text-4xl font-bold text-gray-900 mt-1">{value}</p>
+    </div>
+    <div className="text-4xl opacity-80">{icon}</div>
+  </div>
+);

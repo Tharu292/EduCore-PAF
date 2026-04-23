@@ -1,50 +1,74 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { RefreshCw, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useUser } from "@clerk/clerk-react";
+
+import AppLayout from "../components/AppLayout";
 import TicketCard from "../components/TicketCard";
 import { getMyTickets } from "../services/ticketService";
+import Toast from "../components/Toast";
 
 export default function MyTickets() {
+  const { user, isLoaded } = useUser();
+  const navigate = useNavigate();
+
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const navigate = useNavigate();
+  const [toast, setToast] = useState(null);
 
-  const loadTickets = async () => {
+  const currentUserId = user?.id;
+
+  const showToast = (message, type = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
+
+  const loadTickets = useCallback(async () => {
+    if (!currentUserId) return;
+
     setLoading(true);
     try {
-      const res = await getMyTickets("user1"); // Change "user1" to dynamic user later
+      const res = await getMyTickets(currentUserId);
       setTickets(res.data || []);
     } catch (err) {
-      console.error("Failed to load my tickets:", err);
-      alert("Failed to load tickets");
+      console.error("Failed to load tickets:", err);
+      showToast("Failed to load your tickets", "error");
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUserId]);
 
   useEffect(() => {
-    loadTickets();
-  }, []);
+    if (isLoaded && currentUserId) {
+      loadTickets();
+    }
+  }, [isLoaded, currentUserId, loadTickets]);
 
   const filteredTickets = tickets.filter((ticket) =>
-    ticket.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    ticket.status.toLowerCase().includes(searchTerm.toLowerCase())
+    ticket.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    ticket.status?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  if (!isLoaded) {
+    return <div className="text-center py-20">Loading user information...</div>;
+  }
+
   return (
-    <div className="max-w-7xl mx-auto">
+    <AppLayout>
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-semibold text-gray-900">My Tickets</h1>
-          <p className="text-gray-600 mt-1">Track all your reported incidents and maintenance requests</p>
+          <p className="text-gray-600 mt-1">Track all your reported incidents</p>
         </div>
 
         <div className="flex items-center gap-4">
           <button
             onClick={loadTickets}
             disabled={loading}
-            className="flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-300 rounded-2xl hover:bg-gray-50 transition disabled:opacity-70"
+            className="flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-300 rounded-2xl hover:bg-gray-50 disabled:opacity-70"
           >
             <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
             Refresh
@@ -52,15 +76,13 @@ export default function MyTickets() {
 
           <button
             onClick={() => navigate("/create")}
-            className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-2xl hover:bg-blue-700 transition"
+            className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-2xl hover:bg-blue-700"
           >
-            <Plus size={20} />
-            New Ticket
+            <Plus size={20} /> New Ticket
           </button>
         </div>
       </div>
 
-      {/* Search */}
       <div className="mb-8">
         <input
           type="text"
@@ -94,6 +116,6 @@ export default function MyTickets() {
           ))}
         </div>
       )}
-    </div>
+    </AppLayout>
   );
 }

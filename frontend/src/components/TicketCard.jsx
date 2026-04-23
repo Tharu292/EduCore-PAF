@@ -1,14 +1,18 @@
 import { MessageSquare, Paperclip, Calendar, User } from "lucide-react";
 import StatusBadge from "./StatusBadge";
 import { format } from "date-fns";
+import UserName from "./UserName";
+import { useUser } from "@clerk/clerk-react";
 
 export default function TicketCard({ ticket, onClick }) {
+  const { user } = useUser();
+
   return (
     <div
       onClick={onClick}
       className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-xl transition-all cursor-pointer group"
     >
-      <div className="flex justify-between items-start mb-4">
+      <div className="flex justify-between items-start mb-4 gap-3">
         <h3 className="font-semibold text-lg text-gray-900 line-clamp-2 group-hover:text-blue-600 transition-colors">
           {ticket.title}
         </h3>
@@ -20,14 +24,18 @@ export default function TicketCard({ ticket, onClick }) {
       <div className="flex flex-wrap gap-4 text-sm text-gray-500">
         <div className="flex items-center gap-1.5">
           <User size={16} />
-          <span>{ticket.createdBy}</span>
+          <UserName clerkUserId={ticket.createdBy} currentUserId={user?.id} />
         </div>
+
         {ticket.assignedTo && (
           <div className="flex items-center gap-1.5">
             <User size={16} className="text-amber-600" />
-            <span className="text-amber-600">Assigned: {ticket.assignedTo}</span>
+            <span className="text-amber-600">
+              Assigned: <UserName clerkUserId={ticket.assignedTo} currentUserId={user?.id} />
+            </span>
           </div>
         )}
+
         <div className="flex items-center gap-1.5">
           <Calendar size={16} />
           <span>{ticket.createdAt ? format(new Date(ticket.createdAt), "MMM dd") : "—"}</span>

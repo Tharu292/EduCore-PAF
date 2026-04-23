@@ -9,20 +9,36 @@ import java.util.List;
 
 @Service
 public class NotificationService {
+
     @Autowired
-    private NotificationRepository repo;
+    private NotificationRepository notificationRepository;
 
-    public void create(String userId, String message) {
-        repo.save(new Notification(userId, message));
+    public Notification create(String clerkUserId, String message) {
+        Notification notification = new Notification(clerkUserId, message);
+        return notificationRepository.save(notification);
     }
 
-    public List<Notification> getByUser(String userId) {
-        return repo.findByUserId(userId);
+    public List<Notification> getByUser(String clerkUserId) {
+        return notificationRepository.findByUserIdOrderByCreatedAtDesc(clerkUserId);
     }
 
-    public void markRead(String id) {
-        Notification n = repo.findById(id).orElseThrow();
-        n.setRead(true);
-        repo.save(n);
+    public void markRead(String id, String clerkUserId) {
+        Notification notification = notificationRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Notification not found"));
+
+        if (!notification.getUserId().equals(clerkUserId)) {
+            throw new RuntimeException("You are not allowed to modify this notification");
+        }
+
+        notification.setRead(true);
+        notificationRepository.save(notification);
+    }
+
+    public void markAllReadForUser(String clerkUserId) {
+        List<Notification> notifications = notificationRepository.findByUserIdOrderByCreatedAtDesc(clerkUserId);
+        for (Notification n : notifications) {
+            n.setRead(true);
+        }
+        notificationRepository.saveAll(notifications);
     }
 }

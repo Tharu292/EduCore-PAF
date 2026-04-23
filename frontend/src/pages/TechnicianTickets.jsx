@@ -1,52 +1,76 @@
 import { useEffect, useState } from "react";
 import { RefreshCw, AlertTriangle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useUser } from "@clerk/clerk-react";
+
+import AppLayout from "../components/AppLayout";
 import TicketCard from "../components/TicketCard";
 import { getTechnicianTickets, updateStatus } from "../services/ticketService";
+import Toast from "../components/Toast";
 
 export default function TechnicianTickets() {
+  const { user, isLoaded } = useUser();
+  const navigate = useNavigate();
+
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const navigate = useNavigate();
+  const [toast, setToast] = useState(null);
+
+  const currentUserId = user?.id;
+
+  const showToast = (message, type = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
 
   const loadTickets = async () => {
+    if (!isLoaded || !currentUserId) return;
+
     setLoading(true);
     try {
-      const res = await getTechnicianTickets("tech1"); // Change "tech1" to dynamic technician name later
-      setTickets(res.data || []);
+      const res = await getTechnicianTickets(currentUserId);
+      setTickets(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("Failed to load technician tickets:", err);
-      // If no tickets assigned, show empty state instead of alert
+      showToast("Failed to load assigned tickets", "error");
+      setTickets([]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadTickets();
-  }, []);
+    if (isLoaded && currentUserId) {
+      loadTickets();
+    }
+  }, [isLoaded, currentUserId]);
 
   const handleMarkResolved = async (id) => {
     if (!confirm("Mark this ticket as RESOLVED?")) return;
 
     try {
       await updateStatus(id, "RESOLVED");
-      alert("Ticket marked as Resolved");
-      loadTickets(); // refresh list
+      showToast("Ticket marked as Resolved", "success");
+      loadTickets();
     } catch (err) {
-      console.error(err);
-      alert("Failed to update status");
+      showToast(err.response?.data?.error || "Failed to update status", "error");
     }
   };
 
   const filteredTickets = tickets.filter((ticket) =>
-    ticket.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    ticket.status.toLowerCase().includes(searchTerm.toLowerCase())
+    ticket.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    ticket.status?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  if (!isLoaded) {
+    return <div className="text-center py-20">Loading...</div>;
+  }
+
   return (
-    <div className="max-w-7xl mx-auto">
+    <AppLayout>
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-semibold text-gray-900 flex items-center gap-3">
@@ -59,14 +83,13 @@ export default function TechnicianTickets() {
         <button
           onClick={loadTickets}
           disabled={loading}
-          className="flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-300 rounded-2xl hover:bg-gray-50 transition disabled:opacity-70"
+          className="flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-300 rounded-2xl hover:bg-gray-50 disabled:opacity-70"
         >
           <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
           Refresh
         </button>
       </div>
 
-      {/* Search */}
       <div className="mb-8">
         <input
           type="text"
@@ -92,7 +115,6 @@ export default function TechnicianTickets() {
                 onClick={() => navigate(`/ticket/${ticket.id}`)}
               />
 
-              {/* Technician quick action - only show if not resolved/closed */}
               {ticket.status !== "RESOLVED" && ticket.status !== "CLOSED" && (
                 <button
                   onClick={(e) => {
@@ -108,6 +130,6 @@ export default function TechnicianTickets() {
           ))}
         </div>
       )}
-    </div>
+    </AppLayout>
   );
 }

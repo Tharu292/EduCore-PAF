@@ -2,238 +2,259 @@ package com.smartcampus.backend.service;
 
 import com.smartcampus.backend.model.Comment;
 import com.smartcampus.backend.model.Ticket;
+import com.smartcampus.backend.model.User;
 import com.smartcampus.backend.repository.TicketRepository;
+import com.smartcampus.backend.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import org.springframework.web.multipart.MultipartFile;
-import java.io.File;
-import java.io.IOException;
-
-import static com.smartcampus.backend.model.Ticket.Status.*;
-
 
 @Service
 public class TicketService {
 
     private final TicketRepository ticketRepository;
+    private final UserRepository userRepository;
+    private final NotificationService notificationService;
 
-    public TicketService(TicketRepository ticketRepository){
+    @Autowired
+    public TicketService(TicketRepository ticketRepository,
+                         UserRepository userRepository,
+                         NotificationService notificationService) {
         this.ticketRepository = ticketRepository;
+        this.userRepository = userRepository;
+        this.notificationService = notificationService;
     }
 
-    public Ticket createTicket(Ticket ticket){
-        ticket.setStatus(OPEN);
-        return ticketRepository.save(ticket);
+    public Ticket createTicket(Ticket ticket, Authentication auth) {
+        User currentUser = (User) auth.getPrincipal();
+
+        ticket.setCreatedBy(currentUser.getClerkUserId());
+        ticket.setAssignedTo(null);
+        ticket.setStatus(Ticket.Status.OPEN);
+        ticket.setCreatedAt(LocalDateTime.now());
+        ticket.setUpdatedAt(LocalDateTime.now());
+
+        if (ticket.getComments() == null) ticket.setComments(new ArrayList<>());
+        if (ticket.getAttachments() == null) ticket.setAttachments(new ArrayList<>());
+
+        Ticket savedTicket = ticketRepository.save(ticket);
+
+        userRepository.findAll().stream()
+                .filter(u -> u.getRoles() != null && u.getRoles().contains("ADMIN"))
+                .forEach(admin -> notificationService.create(
+                        admin.getClerkUserId(),
+                        "New ticket created: " + savedTicket.getTitle()
+                ));
+
+        return savedTicket;
     }
 
-    public List<Ticket> getTicketsByUser(String username) {
-        return ticketRepository.findByCreatedBy(username);
-    }
     public List<Ticket> getAllTickets() {
         return ticketRepository.findAll();
     }
 
     public Ticket getTicketById(String id) {
-        return ticketRepository.findById(id).orElse(null);
+        return ticketRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Ticket not found"));
     }
 
-    public Ticket updateStatus(String id, Ticket.Status newStatus){
+    public List<Ticket> getTicketsByUser(String clerkUserId) {
+        return ticketRepository.findByCreatedBy(clerkUserId);
+    }
 
-        Ticket ticket = ticketRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Ticket not found"));
+    public List<Ticket> getTicketsByTechnician(String clerkUserId) {
+        return ticketRepository.findByAssignedTo(clerkUserId);
+    }
 
-        Ticket.Status currentStatus = ticket.getStatus();
+    public Ticket updateStatus(String id, Ticket.Status newStatus, Authentication auth) {
+        Ticket ticket = getTicketById(id);
+        User currentUser = (User) auth.getPrincipal();
 
-        //Validate transactions
-        if(!isValidTransition(currentStatus, newStatus)){
-            throw new RuntimeException("Invalid status transaction from " + currentStatus + "to" + newStatus);
+        boolean isAdmin = currentUser.getRoles().contains("ADMIN");
+        boolean isAssignedTechnician = ticket.getAssignedTo() != null &&
+                currentUser.getClerkUserId().equals(ticket.getAssignedTo());
+        boolean isCreator = currentUser.getClerkUserId().equals(ticket.getCreatedBy());
+
+        if (!canUpdateStatus(ticket.getStatus(), newStatus, isAdmin, isAssignedTechnician, isCreator)) {
+            throw new RuntimeException("You are not allowed to change this ticket from "
+                    + ticket.getStatus() + " to " + newStatus);
         }
 
+        Ticket.Status oldStatus = ticket.getStatus();
         ticket.setStatus(newStatus);
-        return ticketRepository.save(ticket);
-    }
-    private boolean isValidTransition(Ticket.Status current, Ticket.Status next) {
+        ticket.setUpdatedAt(LocalDateTime.now());
 
-        switch (current) {
-            case OPEN:
-                return next == Ticket.Status.IN_PROGRESS || next == Ticket.Status.REJECTED;
+        Ticket saved = ticketRepository.save(ticket);
 
-            case IN_PROGRESS:
-                return next == Ticket.Status.RESOLVED || next == Ticket.Status.CLOSED;
+        notificationService.create(
+                ticket.getCreatedBy(),
+                "Your ticket '" + ticket.getTitle() + "' status changed from " + oldStatus + " to " + newStatus
+        );
 
-            case RESOLVED:
-                return next == Ticket.Status.CLOSED;
-
-            case CLOSED:
-            case REJECTED:
-                return false;
-
-            default:
-                return false;
+        if (ticket.getAssignedTo() != null && !ticket.getAssignedTo().equals(ticket.getCreatedBy())) {
+            notificationService.create(
+                    ticket.getAssignedTo(),
+                    "Ticket '" + ticket.getTitle() + "' status changed to " + newStatus
+            );
         }
+
+        return saved;
     }
 
-    public Ticket addComment(String ticketId, Comment comment) {
+    public Ticket addComment(String ticketId, Comment comment, Authentication auth) {
+        Ticket ticket = getTicketById(ticketId);
+        User currentUser = (User) auth.getPrincipal();
 
-        Ticket ticket = ticketRepository.findById(ticketId)
-                .orElseThrow(() -> new RuntimeException("Ticket not found"));
+        boolean isAdmin = currentUser.getRoles().contains("ADMIN");
+        boolean isAssigned = ticket.getAssignedTo() != null &&
+                currentUser.getClerkUserId().equals(ticket.getAssignedTo());
+        boolean isCreator = currentUser.getClerkUserId().equals(ticket.getCreatedBy());
 
-        // Ownership validation
-        if (!comment.getUser().equals(ticket.getCreatedBy()) &&
-                (ticket.getAssignedTo() == null || !comment.getUser().equals(ticket.getAssignedTo()))) {
-
-            throw new RuntimeException("User not authorized to comment on this ticket");
+        if (!isAdmin && !isAssigned && !isCreator) {
+            throw new RuntimeException("You are not allowed to comment on this ticket");
         }
 
         comment.setId(UUID.randomUUID().toString());
-        // Set timestamp
+        comment.setUser(currentUser.getClerkUserId());
         comment.setCreatedAt(LocalDateTime.now());
 
-        // Initialize list if null
         if (ticket.getComments() == null) {
-            ticket.setComments(new java.util.ArrayList<>());
+            ticket.setComments(new ArrayList<>());
         }
 
         ticket.getComments().add(comment);
+        ticket.setUpdatedAt(LocalDateTime.now());
+
+        Ticket saved = ticketRepository.save(ticket);
+
+        if (!ticket.getCreatedBy().equals(currentUser.getClerkUserId())) {
+            notificationService.create(ticket.getCreatedBy(),
+                    "New comment on your ticket: " + ticket.getTitle());
+        }
+
+        if (ticket.getAssignedTo() != null &&
+                !ticket.getAssignedTo().equals(currentUser.getClerkUserId())) {
+            notificationService.create(ticket.getAssignedTo(),
+                    "New comment on assigned ticket: " + ticket.getTitle());
+        }
+
+        return saved;
+    }
+
+    public Ticket updateComment(String ticketId, String commentId, Comment updatedComment, Authentication auth) {
+        Ticket ticket = getTicketById(ticketId);
+        User currentUser = (User) auth.getPrincipal();
+        boolean isAdmin = currentUser.getRoles().contains("ADMIN");
+
+        if (ticket.getComments() == null || ticket.getComments().isEmpty()) {
+            throw new RuntimeException("No comments found");
+        }
+
+        Comment target = ticket.getComments().stream()
+                .filter(c -> c.getId().equals(commentId))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Comment not found"));
+
+        if (!isAdmin && !target.getUser().equals(currentUser.getClerkUserId())) {
+            throw new RuntimeException("You can only edit your own comments");
+        }
+
+        target.setMessage(updatedComment.getMessage());
+        ticket.setUpdatedAt(LocalDateTime.now());
 
         return ticketRepository.save(ticket);
     }
-    public Ticket updateComment(String ticketId, String commentId, Comment updatedComment) {
 
-        Ticket ticket = ticketRepository.findById(ticketId)
-                .orElseThrow(() -> new RuntimeException("Ticket not found"));
+    public Ticket deleteComment(String ticketId, String commentId, Authentication auth) {
+        Ticket ticket = getTicketById(ticketId);
+        User currentUser = (User) auth.getPrincipal();
+        boolean isAdmin = currentUser.getRoles().contains("ADMIN");
 
-        for (Comment comment : ticket.getComments()) {
-
-            if (comment.getId().equals(commentId)) {
-
-                // Ownership check
-                if (!comment.getUser().equals(updatedComment.getUser())) {
-                    throw new RuntimeException("You can only edit your own comment");
-                }
-
-                comment.setMessage(updatedComment.getMessage());
-                return ticketRepository.save(ticket);
-            }
+        if (ticket.getComments() == null || ticket.getComments().isEmpty()) {
+            throw new RuntimeException("No comments found");
         }
 
-        throw new RuntimeException("Comment not found");
-    }
+        Comment target = ticket.getComments().stream()
+                .filter(c -> c.getId().equals(commentId))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Comment not found"));
 
-    public Ticket deleteComment(String ticketId, String commentId, String user) {
-
-        Ticket ticket = ticketRepository.findById(ticketId)
-                .orElseThrow(() -> new RuntimeException("Ticket not found"));
-
-        Comment targetComment = null;
-
-        for (Comment comment : ticket.getComments()) {
-            if (comment.getId().equals(commentId)) {
-                targetComment = comment;
-                break;
-            }
+        if (!isAdmin && !target.getUser().equals(currentUser.getClerkUserId())) {
+            throw new RuntimeException("You can only delete your own comments");
         }
 
-        if (targetComment == null) {
-            throw new RuntimeException("Comment not found");
-        }
-
-        // Ownership check
-        if (!targetComment.getUser().equals(user)) {
-            throw new RuntimeException("You can only delete your own comment");
-        }
-
-        ticket.getComments().remove(targetComment);
+        ticket.getComments().remove(target);
+        ticket.setUpdatedAt(LocalDateTime.now());
 
         return ticketRepository.save(ticket);
     }
-    public Ticket uploadImages(String ticketId, List<MultipartFile> files, String user) throws IOException {
 
-        Ticket ticket = ticketRepository.findById(ticketId)
-                .orElseThrow(() -> new RuntimeException("Ticket not found"));
+    public Ticket uploadImages(String ticketId, List<MultipartFile> files, Authentication auth) throws IOException {
+        Ticket ticket = getTicketById(ticketId);
+        User currentUser = (User) auth.getPrincipal();
 
-        // Authorization
-        if (!user.equals(ticket.getCreatedBy()) &&
-                (ticket.getAssignedTo() == null || !user.equals(ticket.getAssignedTo()))) {
-            throw new RuntimeException("Not authorized to upload images");
+        boolean isAdmin = currentUser.getRoles().contains("ADMIN");
+        boolean isCreator = currentUser.getClerkUserId().equals(ticket.getCreatedBy());
+        boolean isAssigned = ticket.getAssignedTo() != null &&
+                currentUser.getClerkUserId().equals(ticket.getAssignedTo());
+
+        if (!isAdmin && !isCreator && !isAssigned) {
+            throw new RuntimeException("Not authorized to upload images to this ticket");
         }
 
-        // Initialize list
         if (ticket.getAttachments() == null) {
-            ticket.setAttachments(new java.util.ArrayList<>());
+            ticket.setAttachments(new ArrayList<>());
         }
 
-        // Limit check
         if (ticket.getAttachments().size() + files.size() > 3) {
             throw new RuntimeException("Maximum 3 images allowed per ticket");
         }
 
         String uploadDir = System.getProperty("user.dir") + "/uploads/";
-
         File dir = new File(uploadDir);
         if (!dir.exists()) {
             dir.mkdirs();
         }
 
-        List<String> fileNames = new ArrayList<>();
-
         for (MultipartFile file : files) {
+            if (file.isEmpty()) continue;
+
+            String contentType = file.getContentType();
+            if (contentType == null || (!contentType.equals("image/jpeg")
+                    && !contentType.equals("image/png")
+                    && !contentType.equals("image/jpg")
+                    && !contentType.equals("image/webp"))) {
+                throw new RuntimeException("Only image files are allowed");
+            }
 
             String fileName = UUID.randomUUID() + "_" + file.getOriginalFilename();
             File destination = new File(uploadDir + fileName);
-
             file.transferTo(destination);
-
             ticket.getAttachments().add(fileName);
         }
 
+        ticket.setUpdatedAt(LocalDateTime.now());
         return ticketRepository.save(ticket);
     }
-    public Ticket assignTechnician(String ticketId, String technician, String admin) {
 
-        Ticket ticket = ticketRepository.findById(ticketId)
-                .orElseThrow(() -> new RuntimeException("Ticket not found"));
+    public Ticket removeAttachment(String ticketId, String filename, Authentication auth) {
+        Ticket ticket = getTicketById(ticketId);
+        User currentUser = (User) auth.getPrincipal();
 
-        //Only admin can assign
-        if (!admin.equals("admin")) {
-            throw new RuntimeException("Only admin can assign technician");
-        }
+        boolean isAdmin = currentUser.getRoles().contains("ADMIN");
+        boolean isCreator = currentUser.getClerkUserId().equals(ticket.getCreatedBy());
+        boolean isAssigned = ticket.getAssignedTo() != null &&
+                currentUser.getClerkUserId().equals(ticket.getAssignedTo());
 
-        //Cannot assign closed ticket
-        if ("CLOSED".equals(ticket.getStatus())) {
-            throw new RuntimeException("Cannot assign technician to closed ticket");
-        }
-
-        //Assign technician
-        ticket.setAssignedTo(technician);
-
-        //Update status automatically
-        ticket.setStatus(Ticket.Status.valueOf("IN_PROGRESS"));
-
-        return ticketRepository.save(ticket);
-    }
-    public List<Ticket> getTicketsByTechnician(String technician) {
-
-        List<Ticket> tickets = ticketRepository.findByAssignedTo(technician);
-
-        if (tickets.isEmpty()) {
-            throw new RuntimeException("No tickets assigned to this technician");
-        }
-
-        return tickets;
-    }
-
-    public Ticket removeAttachment(String ticketId, String filename, String user) {
-        Ticket ticket = ticketRepository.findById(ticketId)
-                .orElseThrow(() -> new RuntimeException("Ticket not found"));
-
-        // Authorization: only creator or assigned technician can remove
-        if (!user.equals(ticket.getCreatedBy()) &&
-                (ticket.getAssignedTo() == null || !user.equals(ticket.getAssignedTo()))) {
+        if (!isAdmin && !isCreator && !isAssigned) {
             throw new RuntimeException("Not authorized to remove attachment");
         }
 
@@ -241,18 +262,90 @@ public class TicketService {
             throw new RuntimeException("Attachment not found");
         }
 
-        // Delete physical file
         String uploadDir = System.getProperty("user.dir") + "/uploads/";
         File fileToDelete = new File(uploadDir + filename);
         if (fileToDelete.exists()) {
             fileToDelete.delete();
         }
 
-        // Remove from list
         ticket.getAttachments().remove(filename);
+        ticket.setUpdatedAt(LocalDateTime.now());
 
         return ticketRepository.save(ticket);
     }
 
-}
+    public Ticket assignTechnician(String ticketId, String technicianClerkId, Authentication auth) {
+        User admin = (User) auth.getPrincipal();
 
+        if (!admin.getRoles().contains("ADMIN")) {
+            throw new RuntimeException("Only ADMIN can assign technicians");
+        }
+
+        User technician = userRepository.findByClerkUserId(technicianClerkId)
+                .orElseThrow(() -> new RuntimeException("Technician user not found"));
+
+        if (technician.getRoles() == null || !technician.getRoles().contains("TECHNICIAN")) {
+            throw new RuntimeException("Selected user is not a technician");
+        }
+
+        Ticket ticket = getTicketById(ticketId);
+
+        if (ticket.getStatus() == Ticket.Status.CLOSED || ticket.getStatus() == Ticket.Status.REJECTED) {
+            throw new RuntimeException("Cannot assign technician to a closed or rejected ticket");
+        }
+
+        ticket.setAssignedTo(technicianClerkId);
+        if (ticket.getStatus() == Ticket.Status.OPEN) {
+            ticket.setStatus(Ticket.Status.IN_PROGRESS);
+        }
+        ticket.setUpdatedAt(LocalDateTime.now());
+
+        Ticket saved = ticketRepository.save(ticket);
+
+        notificationService.create(
+                technicianClerkId,
+                "You have been assigned ticket: " + ticket.getTitle()
+        );
+
+        notificationService.create(
+                ticket.getCreatedBy(),
+                "A technician has been assigned to your ticket: " + ticket.getTitle()
+        );
+
+        return saved;
+    }
+
+    private boolean canUpdateStatus(Ticket.Status current,
+                                    Ticket.Status next,
+                                    boolean isAdmin,
+                                    boolean isAssignedTechnician,
+                                    boolean isCreator) {
+
+        if (current == Ticket.Status.CLOSED || current == Ticket.Status.REJECTED) {
+            return false;
+        }
+
+        if (isAdmin) {
+            return switch (current) {
+                case OPEN -> next == Ticket.Status.IN_PROGRESS || next == Ticket.Status.REJECTED;
+                case IN_PROGRESS -> next == Ticket.Status.RESOLVED;
+                case RESOLVED -> next == Ticket.Status.CLOSED;
+                default -> false;
+            };
+        }
+
+        if (isAssignedTechnician) {
+            return switch (current) {
+                case OPEN -> next == Ticket.Status.IN_PROGRESS;
+                case IN_PROGRESS -> next == Ticket.Status.RESOLVED;
+                default -> false;
+            };
+        }
+
+        if (isCreator) {
+            return current == Ticket.Status.RESOLVED && next == Ticket.Status.CLOSED;
+        }
+
+        return false;
+    }
+}
