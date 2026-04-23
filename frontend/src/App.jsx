@@ -10,26 +10,35 @@ import TicketDetail from "./pages/TicketDetail";
 import AdminPanel from "./pages/Admin";
 import NotificationsPage from "./pages/NotificationsPage";
 
+import AdminDashboard from "./pages/AdminDashboard";
+import AdminBookingManagement from "./pages/AdminBookingManagement";
+import UserDashboard from "./pages/UserDashboard";
+import ResourceBookingPage from "./pages/ResourceBookingPage";
+
 import ProtectedRoute from "./routes/ProtectedRoute";
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Clerk Auth */}
         <Route path="/login/*" element={<Login />} />
         <Route path="/signup/*" element={<Signup />} />
 
+        {/* Default */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
+        {/* Shared dashboard */}
         <Route
           path="/dashboard"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={["USER", "TECHNICIAN", "ADMIN"]}>
               <Dashboard />
             </ProtectedRoute>
           }
         />
 
+        {/* Ticket module - user */}
         <Route
           path="/create"
           element={
@@ -48,11 +57,22 @@ function App() {
           }
         />
 
+        {/* Ticket module - technician */}
         <Route
           path="/technician"
           element={
             <ProtectedRoute allowedRoles={["TECHNICIAN"]}>
               <TechnicianTickets />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Ticket details / notifications */}
+        <Route
+          path="/ticket/:id"
+          element={
+            <ProtectedRoute allowedRoles={["USER", "TECHNICIAN", "ADMIN"]}>
+              <TicketDetail />
             </ProtectedRoute>
           }
         />
@@ -66,15 +86,26 @@ function App() {
           }
         />
 
+        {/* Booking / resource pages */}
         <Route
-          path="/ticket/:id"
+          path="/resources"
           element={
-            <ProtectedRoute allowedRoles={["USER", "TECHNICIAN", "ADMIN"]}>
-              <TicketDetail />
+            <ProtectedRoute allowedRoles={["USER", "ADMIN"]}>
+              <ResourceBookingPage />
             </ProtectedRoute>
           }
         />
 
+        <Route
+          path="/user"
+          element={
+            <ProtectedRoute allowedRoles={["USER"]}>
+              <UserDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Admin pages */}
         <Route
           path="/admin"
           element={
@@ -84,6 +115,25 @@ function App() {
           }
         />
 
+        <Route
+          path="/admin/dashboard"
+          element={
+            <ProtectedRoute allowedRoles={["ADMIN"]}>
+              <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin/bookings"
+          element={
+            <ProtectedRoute allowedRoles={["ADMIN"]}>
+              <AdminBookingManagement />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Fallback */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
