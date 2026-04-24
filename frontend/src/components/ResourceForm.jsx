@@ -84,7 +84,7 @@ function ResourceForm({ onSubmit, selectedResource }) {
 
     return `${daysStr} ${startTime}-${endTime}`;
   };
-
+//Form validations
   const validate = () => {
     const newErrors = {};
 
