@@ -1,6 +1,6 @@
 import API from "../api/axios";
 
-// Get tickets by technician
+// Get tickets by technicians
 export const getTicketsByTechnician = (name) =>
   API.get(`/tickets/technician/${name}`);
 
