@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { Plus, X } from "lucide-react";
 
 import AppLayout from "../components/AppLayout";
@@ -11,7 +11,6 @@ import useCurrentUserRole from "../hooks/useCurrentUserRole";
 
 import {
   getResources,
-  searchResources,
   createResource,
   updateResource,
   deleteResource,
@@ -22,6 +21,7 @@ export default function ResourcePage() {
   const isAdmin = role === "ADMIN";
 
   const [resources, setResources] = useState([]);
+  const [filteredResources, setFilteredResources] = useState([]);
   const [selectedResource, setSelectedResource] = useState(null);
   const [bookingResource, setBookingResource] = useState(null);
   const [showResourceModal, setShowResourceModal] = useState(false);
@@ -37,10 +37,13 @@ export default function ResourcePage() {
     try {
       setLoading(true);
       const res = await getResources();
-      setResources(Array.isArray(res.data) ? res.data : []);
+      const data = Array.isArray(res.data) ? res.data : [];
+      setResources(data);
+      setFilteredResources(data);
     } catch (err) {
       showToast("Failed to load resources", "error");
       setResources([]);
+      setFilteredResources([]);
     } finally {
       setLoading(false);
     }
@@ -50,29 +53,29 @@ export default function ResourcePage() {
     loadResources();
   }, []);
 
-  const handleFilter = async (filters) => {
-    try {
-      const res = await searchResources({
-        type: filters.type || undefined,
-        status: filters.status || undefined,
-      });
+  const handleFilter = useCallback(
+    (filters) => {
+      const q = (filters.search || "").toLowerCase().trim();
 
-      const backendResources = Array.isArray(res.data) ? res.data : [];
-      const q = (filters.search || "").toLowerCase();
-
-      const localFiltered = backendResources.filter((r) => {
-        return (
+      const result = resources.filter((r) => {
+        const matchesSearch =
           !q ||
           r.name?.toLowerCase().includes(q) ||
-          r.location?.toLowerCase().includes(q)
-        );
+          r.location?.toLowerCase().includes(q);
+
+        const matchesType =
+          !filters.type || r.type === filters.type;
+
+        const matchesStatus =
+          !filters.status || r.status === filters.status;
+
+        return matchesSearch && matchesType && matchesStatus;
       });
 
-      setResources(localFiltered);
-    } catch (err) {
-      showToast("Search failed", "error");
-    }
-  };
+      setFilteredResources(result);
+    },
+    [resources]
+  );
 
   const openAddModal = () => {
     setSelectedResource(null);
@@ -119,7 +122,9 @@ export default function ResourcePage() {
   };
 
   const headerTitle = useMemo(() => {
-    return isAdmin ? "Facilities & Assets Catalogue" : "Browse & Book Campus Resources";
+    return isAdmin
+      ? "Facilities & Assets Catalogue"
+      : "Browse & Book Campus Resources";
   }, [isAdmin]);
 
   return (
@@ -159,7 +164,9 @@ export default function ResourcePage() {
                 Resource Catalogue
               </h2>
               <p className="text-gray-500 text-base mt-1">
-                {loading ? "Loading resources..." : `${resources.length} resources available`}
+                {loading
+                  ? "Loading resources..."
+                  : `${filteredResources.length} resources available`}
               </p>
             </div>
 
@@ -175,7 +182,7 @@ export default function ResourcePage() {
           </div>
 
           <ResourceList
-            resources={resources}
+            resources={filteredResources}
             onDelete={handleDelete}
             onEdit={openEditModal}
             onBook={(resource) => setBookingResource(resource)}
@@ -209,7 +216,6 @@ export default function ResourcePage() {
               <ResourceForm
                 onSubmit={handleSubmit}
                 selectedResource={selectedResource}
-                onCancel={closeResourceModal}
               />
             </div>
           </div>
