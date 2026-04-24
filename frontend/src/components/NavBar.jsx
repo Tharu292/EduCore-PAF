@@ -44,7 +44,7 @@ export default function NavBar() {
   );
 }
 
-// 🔥 Clean Tailwind styling
+//  Clean Tailwind styling
 const linkClass = (active) =>
   `px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
     active

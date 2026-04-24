@@ -8,7 +8,7 @@ export const getTicketsByTechnician = (name) =>
 export const assignTechnician = (id, data) =>
   API.put(`/tickets/${id}/assign`, null, { params: data });
 
-// Add comment
+// Add comments
 export const addComment = (id, data) =>
   API.post(`/tickets/${id}/comments`, data);
 
