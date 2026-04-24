@@ -10,3 +10,4 @@ public interface TicketRepository extends MongoRepository<Ticket, String> {
 
     List<Ticket> findByCreatedBy(String createdBy);
 }
+//data structure for ticket repository
