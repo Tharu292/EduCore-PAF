@@ -18,6 +18,8 @@ public class Booking {
     @Id
     private String id;
 
+    // validation part 
+
     @NotBlank(message = "Resource is required")
     private String resourceId;
 
