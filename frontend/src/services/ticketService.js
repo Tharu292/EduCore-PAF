@@ -20,6 +20,14 @@ export const assignTechnician = (ticketId, technicianClerkId) =>
     params: { technicianClerkId },
   });
 
+  export const rejectTicket = (id, reason) =>
+  API.put(`/tickets/${id}/status`, null, {
+    params: {
+      status: "REJECTED",
+      reason,
+    },
+  });
+
 export const addComment = (ticketId, commentData) =>
   API.post(`/tickets/${ticketId}/comments`, commentData);
 
