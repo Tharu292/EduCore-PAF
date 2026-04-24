@@ -7,18 +7,10 @@ export const getTicketById = (id) => API.get(`/tickets/${id}`);
 export const getUserTickets = (clerkUserId) =>
   API.get(`/tickets/user/${clerkUserId}`);
 
-// optional alias so old imports don't break immediately
-export const getMyTickets = getUserTickets;
-
 export const getTechnicianTickets = (clerkUserId) =>
   API.get(`/tickets/technician/${clerkUserId}`);
 
-export const updateStatus = (
-  id,
-  status,
-  reason = "",
-  resolutionNotes = ""
-) =>
+export const updateStatus = (id, status, reason = "", resolutionNotes = "") =>
   API.put(`/tickets/${id}/status`, null, {
     params: { status, reason, resolutionNotes },
   });

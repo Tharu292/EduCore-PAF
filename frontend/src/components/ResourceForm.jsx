@@ -60,7 +60,7 @@ function ResourceForm({ onSubmit, selectedResource }) {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm({ ...form, [name]: value });
-    
+
     if (errors[name]) {
       setErrors({ ...errors, [name]: "" });
     }
@@ -76,12 +76,12 @@ function ResourceForm({ onSubmit, selectedResource }) {
 
   const buildAvailabilityString = () => {
     if (selectedDays.length === 0) return "";
-    const daysStr = selectedDays.length === 7 
-      ? "Daily" 
-      : selectedDays.length >= 5 && selectedDays.includes("Mon") 
-        ? "Mon-Fri" 
+    const daysStr = selectedDays.length === 7
+      ? "Daily"
+      : selectedDays.length >= 5 && selectedDays.includes("Mon")
+        ? "Mon-Fri"
         : selectedDays.join(", ");
-    
+
     return `${daysStr} ${startTime}-${endTime}`;
   };
 
@@ -234,7 +234,7 @@ function ResourceForm({ onSubmit, selectedResource }) {
           <label className="block text-sm font-medium text-zinc-700 mb-1.5">
             Availability <span className="text-red-500">*</span>
           </label>
-          
+
           <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-5 space-y-4">
             {/* Days Selection */}
             <div>
@@ -245,11 +245,10 @@ function ResourceForm({ onSubmit, selectedResource }) {
                     key={day}
                     type="button"
                     onClick={() => toggleDay(day)}
-                    className={`px-4 py-2 text-sm rounded-2xl transition-all ${
-                      selectedDays.includes(day)
+                    className={`px-4 py-2 text-sm rounded-2xl transition-all ${selectedDays.includes(day)
                         ? "bg-zinc-900 text-white"
                         : "bg-white border border-zinc-200 hover:bg-zinc-100"
-                    }`}
+                      }`}
                   >
                     {day}
                   </button>
@@ -293,22 +292,14 @@ function ResourceForm({ onSubmit, selectedResource }) {
       </div>
 
       {/* Action Buttons */}
-      <div className="flex gap-4 pt-6 border-t border-zinc-100">
+      {/* Action Button */}
+      <div className="flex justify-center pt-6 border-t border-zinc-100">
         <button
           type="submit"
-          className="flex-1 flex items-center justify-center gap-2 bg-zinc-900 hover:bg-black text-white font-medium py-3.5 rounded-2xl transition-colors"
+          className="w-56 flex items-center justify-center gap-2 bg-zinc-900 hover:bg-black text-white font-medium py-3.5 rounded-2xl transition-colors"
         >
           <Save className="w-5 h-5" />
           {selectedResource ? "Update Resource" : "Add Resource"}
-        </button>
-
-        <button
-          type="button"
-          onClick={handleCancel}
-          className="flex items-center justify-center gap-2 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 font-medium px-8 py-3.5 rounded-2xl transition-colors"
-        >
-          <X className="w-5 h-5" />
-          Cancel
         </button>
       </div>
     </form>

@@ -4,15 +4,19 @@ import { useUser } from "@clerk/clerk-react";
 
 export default function useCurrentUserRole() {
   const { user, isLoaded, isSignedIn } = useUser();
-  const [role, setRole] = useState("USER");
-  const [roles, setRoles] = useState(["USER"]);
+
+  const [role, setRole] = useState(null);
+  const [roles, setRoles] = useState([]);
   const [loadingRole, setLoadingRole] = useState(true);
 
   useEffect(() => {
     const fetchRole = async () => {
       try {
+        setLoadingRole(true);
+
         const res = await API.get("/users/me");
         const backendRoles = res.data.roles || ["USER"];
+
         setRoles(backendRoles);
 
         if (backendRoles.includes("ADMIN")) setRole("ADMIN");
@@ -29,7 +33,9 @@ export default function useCurrentUserRole() {
 
     if (isLoaded && isSignedIn && user?.id) {
       fetchRole();
-    } else if (isLoaded) {
+    } else if (isLoaded && !isSignedIn) {
+      setRole(null);
+      setRoles([]);
       setLoadingRole(false);
     }
   }, [isLoaded, isSignedIn, user?.id]);

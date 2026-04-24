@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { SignedIn, SignedOut, SignIn, SignUp } from "@clerk/clerk-react";
 
 import ProtectedRoute from "./routes/ProtectedRoute";
+import RoleRedirect from "./routes/RoleDirect";
+
 import Dashboard from "./pages/Dashboard";
 import CreateTicket from "./pages/CreateTicket";
 import MyTickets from "./pages/MyTickets";
@@ -13,66 +15,57 @@ import ResourcePage from "./pages/ResourcePage";
 import MyBookings from "./pages/MyBookings";
 import AdminBookingManagement from "./pages/AdminBookingManagement";
 import QRCheckin from "./pages/QRCheckin";
-import useCurrentUserRole from "./hooks/useCurrentUserRole";
-
-function RoleBasedHomeRedirect() {
-  const { role, loadingRole } = useCurrentUserRole();
-
-  if (loadingRole) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-gray-500">
-        Loading...
-      </div>
-    );
-  }
-
-  if (role === "ADMIN") {
-    return <Navigate to="/admin" replace />;
-  }
-
-  if (role === "TECHNICIAN") {
-    return <Navigate to="/technician" replace />;
-  }
-
-  return <Navigate to="/dashboard" replace />;
-}
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route
-          path="/login"
+          path="/login/*"
           element={
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
               <SignedOut>
-                <SignIn routing="path" path="/login" signUpUrl="/signup" />
+                <SignIn
+                  routing="path"
+                  path="/login"
+                  signUpUrl="/signup"
+                  forceRedirectUrl="/"
+                />
               </SignedOut>
+
               <SignedIn>
-                <RoleBasedHomeRedirect />
+                <RoleRedirect />
               </SignedIn>
             </div>
           }
         />
 
         <Route
-          path="/signup"
+          path="/signup/*"
           element={
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
               <SignedOut>
-                <SignUp routing="path" path="/signup" signInUrl="/login" />
+                <SignUp
+                  routing="path"
+                  path="/signup"
+                  signInUrl="/login"
+                  forceRedirectUrl="/"
+                />
               </SignedOut>
+
               <SignedIn>
-                <RoleBasedHomeRedirect />
+                <RoleRedirect />
               </SignedIn>
             </div>
           }
         />
+
+        <Route path="/" element={<RoleRedirect />} />
 
         <Route
           path="/dashboard"
           element={
-            <ProtectedRoute allowedRoles={["USER", "ADMIN", "TECHNICIAN"]}>
+            <ProtectedRoute allowedRoles={["USER"]}>
               <Dashboard />
             </ProtectedRoute>
           }
@@ -90,7 +83,7 @@ function App() {
         <Route
           path="/my-bookings"
           element={
-            <ProtectedRoute allowedRoles={["USER", "ADMIN", "TECHNICIAN"]}>
+            <ProtectedRoute allowedRoles={["USER"]}>
               <MyBookings />
             </ProtectedRoute>
           }
@@ -108,7 +101,7 @@ function App() {
         <Route
           path="/my-tickets"
           element={
-            <ProtectedRoute allowedRoles={["USER", "ADMIN", "TECHNICIAN"]}>
+            <ProtectedRoute allowedRoles={["USER"]}>
               <MyTickets />
             </ProtectedRoute>
           }
@@ -126,7 +119,7 @@ function App() {
         <Route
           path="/technician"
           element={
-            <ProtectedRoute allowedRoles={["TECHNICIAN", "ADMIN"]}>
+            <ProtectedRoute allowedRoles={["TECHNICIAN"]}>
               <TechnicianTickets />
             </ProtectedRoute>
           }
@@ -168,8 +161,7 @@ function App() {
           }
         />
 
-        <Route path="/" element={<RoleBasedHomeRedirect />} />
-        <Route path="*" element={<RoleBasedHomeRedirect />} />
+        <Route path="*" element={<RoleRedirect />} />
       </Routes>
     </BrowserRouter>
   );

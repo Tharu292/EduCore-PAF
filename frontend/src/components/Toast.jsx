@@ -8,9 +8,8 @@ export default function Toast({ message, type = "success", onClose }) {
 
   return (
     <div
-      className={`fixed top-6 right-6 px-6 py-4 rounded-2xl shadow-xl flex items-center gap-3 z-50 ${
-        type === "success" ? "bg-green-600 text-white" : "bg-red-600 text-white"
-      }`}
+      className={`fixed top-6 right-6 px-6 py-4 rounded-2xl shadow-xl flex items-center gap-3 z-[9999]
+      ${type === "success" ? "bg-green-600 text-white" : "bg-red-600 text-white"}`}
     >
       <span className="font-medium">{message}</span>
     </div>

@@ -2,13 +2,7 @@ import { Navigate } from "react-router-dom";
 import { SignedIn, SignedOut } from "@clerk/clerk-react";
 import useCurrentUserRole from "../hooks/useCurrentUserRole";
 
-function getHomePath(role) {
-  if (role === "ADMIN") return "/admin";
-  if (role === "TECHNICIAN") return "/technician";
-  return "/dashboard";
-}
-
-export default function ProtectedRoute({ allowedRoles = [], children }) {
+export default function RoleRedirect() {
   const { role, loadingRole } = useCurrentUserRole();
 
   return (
@@ -20,12 +14,14 @@ export default function ProtectedRoute({ allowedRoles = [], children }) {
       <SignedIn>
         {loadingRole ? (
           <div className="min-h-screen flex items-center justify-center text-gray-500">
-            Loading permissions...
+            Loading dashboard...
           </div>
-        ) : allowedRoles.length > 0 && !allowedRoles.includes(role) ? (
-          <Navigate to={getHomePath(role)} replace />
+        ) : role === "ADMIN" ? (
+          <Navigate to="/admin" replace />
+        ) : role === "TECHNICIAN" ? (
+          <Navigate to="/technician" replace />
         ) : (
-          children
+          <Navigate to="/dashboard" replace />
         )}
       </SignedIn>
     </>
