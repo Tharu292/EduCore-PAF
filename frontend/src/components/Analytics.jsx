@@ -41,7 +41,7 @@ function Analytics({ resources }) {
         </div>
 
       </div>
-
+//bar chart for top resources by capacity
       {/* 📊 BAR CHART */}
       <div className="bg-white p-5 rounded-xl shadow">
         <h3 className="font-semibold mb-3">Top Resources (Capacity)</h3>
