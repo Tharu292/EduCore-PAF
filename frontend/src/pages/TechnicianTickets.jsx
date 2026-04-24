@@ -1,30 +1,27 @@
 import { useEffect, useState } from "react";
-import { getTicketsByTechnician } from "../services/ticketService";
 import API from "../api/axios";
+import { getTicketsByTechnician } from "../services/ticketService";
+
+async function loadTechnicianTickets(setTickets) {
+  try {
+    const res = await getTicketsByTechnician("tech1");
+    setTickets(res.data);
+  } catch (err) {
+    console.log(err);
+  }
+}
 
 function TechnicianTickets() {
   const [tickets, setTickets] = useState([]);
 
   useEffect(() => {
-    loadTickets();
+    loadTechnicianTickets(setTickets);
   }, []);
-
-  const loadTickets = async () => {
-    try {
-      const res = await getTicketsByTechnician("tech1");
-      setTickets(res.data);
-    } catch (err) {
-      console.log(err);
-    }
-  };
 
   const updateStatus = async (id) => {
     try {
-      // ✅ FIXED: send status as query param
       await API.put(`/tickets/${id}/status?status=RESOLVED`);
-
-      // reload tickets after update
-      loadTickets();
+      await loadTechnicianTickets(setTickets);
     } catch (err) {
       console.log(err);
     }
@@ -39,9 +36,7 @@ function TechnicianTickets() {
           <h4>{t.title}</h4>
           <p>Status: {t.status}</p>
 
-          <button onClick={() => updateStatus(t.id)}>
-            Mark Resolved
-          </button>
+          <button onClick={() => updateStatus(t.id)}>Mark Resolved</button>
         </div>
       ))}
     </div>

@@ -4,13 +4,13 @@ import API from "../api/axios";
 import useAuthToken from "../hooks/useAuthToken";
 
 export default function AdminPanel() {
-  // Clerk Token එක Axios වලට සම්බන්ධ කිරීම
+  
   useAuthToken();
 
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // 1. Backend එකෙන් සැබෑ දත්ත ලබා ගැනීම
+  
   useEffect(() => {
     API.get("/admin/users")
       .then((res) => {
@@ -23,11 +23,11 @@ export default function AdminPanel() {
       });
   }, []);
 
-  // 2. Role එක Update කිරීමේ Function එක
+  
   const handleRoleChange = (userId, newRole) => {
     API.put(`/admin/role/${userId}`, [newRole])
       .then(() => {
-        // UI එක ක්ෂණිකව Update කිරීම
+       
         setUsers((prev) =>
           prev.map((u) => (u.id === userId ? { ...u, roles: [newRole] } : u))
         );
@@ -39,7 +39,7 @@ export default function AdminPanel() {
       });
   };
 
-  // 3. Stats කාඩ්පත් සඳහා ගණනය කිරීම්
+  
   const totalUsers = users.length;
   const admins = users.filter((u) => u.roles?.includes("ADMIN")).length;
   const standardUsers = totalUsers - admins;
