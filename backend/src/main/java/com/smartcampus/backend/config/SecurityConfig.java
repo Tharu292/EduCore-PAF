@@ -1,61 +1,73 @@
 package com.smartcampus.backend.config;
 
-// ඔබගේ දැනට තිබූ import එක
-import com.smartcampus.backend.config.JwtAuthFilter;
-
-// අලුතින් එකතු වූ imports
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import java.util.Arrays;
 
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, JwtAuthFilter jwtFilter) throws Exception {
-        return http
-                // 1. CORS සැකසුම් සක්‍රිය කිරීම (අලුතින් එකතු කළ කොටස)
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+    private final JwtAuthFilter jwtAuthFilter;
+    private final CorsConfigurationSource corsConfigurationSource;
 
-                .csrf(csrf -> csrf.disable())
-                .authorizeHttpRequests(auth -> auth
-                        // 2. Browser එකෙන් එන Preflight (OPTIONS) requests වලට පූර්ණ අවසර ලබා දීම (අත්‍යවශ්‍යයි!)
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-
-                        .requestMatchers("/api/admin/**").hasAuthority("ADMIN")
-                        .anyRequest().authenticated()
-                )
-                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
-                .build();
+    public SecurityConfig(JwtAuthFilter jwtAuthFilter,
+                          CorsConfigurationSource corsConfigurationSource) {
+        this.jwtAuthFilter = jwtAuthFilter;
+        this.corsConfigurationSource = corsConfigurationSource;
     }
 
-    // 3. React Frontend එකට අවසර ලබා දෙන CORS Configuration Bean එක (අලුතින් එකතු කළ කොටස)
     @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        return http
+                .cors(cors -> cors.configurationSource(corsConfigurationSource))
+                .csrf(csrf -> csrf.disable())
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers("/uploads/**").permitAll()
+                        .requestMatchers("/ws/**").permitAll()
 
-        // React App එක run වෙන port එකට (5173) අවසර දීම
-        configuration.setAllowedOrigins(Arrays.asList("http://localhost:5173"));
+                        // Disable old custom login system
+                        .requestMatchers("/api/auth/**").denyAll()
 
-        // අවශ්‍ය HTTP methods සියල්ලටම ඉඩ දීම
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+                        // User/admin APIs
+                        .requestMatchers("/api/users/me").authenticated()
+                        .requestMatchers("/api/users/by-clerk/**").authenticated()
+                        .requestMatchers("/api/admin/**").hasAuthority("ADMIN")
 
-        // Clerk Token (Authorization Header) එක සහ අනෙකුත් headers යැවීමට ඉඩ දීම
-        configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Accept"));
-        configuration.setAllowCredentials(true);
+                        // Notifications
+                        .requestMatchers("/api/notifications/**").authenticated()
 
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        // පද්ධතියේ ඇති සියලුම API Endpoints වලට මෙය අදාළ කිරීම
-        source.registerCorsConfiguration("/**", configuration);
-        return source;
+                        // Tickets
+                        .requestMatchers("/api/tickets/**").authenticated()
+
+                        // Resources
+                        .requestMatchers(HttpMethod.GET, "/api/resources/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/resources/**").hasAuthority("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/resources/**").hasAuthority("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/resources/**").hasAuthority("ADMIN")
+
+                        // Reviews
+                        .requestMatchers("/api/reviews/**").authenticated()
+
+                        // Bookings
+                        .requestMatchers(HttpMethod.GET, "/api/bookings").hasAuthority("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/bookings/me").hasAuthority("USER")
+                        .requestMatchers(HttpMethod.GET, "/api/bookings/resource/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/bookings/**").hasAuthority("USER")
+                        .requestMatchers(HttpMethod.PUT, "/api/bookings/*/approve").hasAuthority("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/bookings/*/reject").hasAuthority("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/bookings/*/cancel").hasAuthority("USER")
+                        .requestMatchers(HttpMethod.PUT, "/api/bookings/*/reschedule").hasAuthority("USER")
+
+                        .anyRequest().authenticated()
+                )
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .build();
     }
 }

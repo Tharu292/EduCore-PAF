@@ -1,52 +1,138 @@
-import { MessageSquare, Paperclip, Calendar, User } from "lucide-react";
+import {
+  MessageSquare,
+  Paperclip,
+  Calendar,
+  User,
+  Wrench,
+  TimerReset,
+} from "lucide-react";
 import StatusBadge from "./StatusBadge";
 import { format } from "date-fns";
+import UserName from "./UserName";
+import { useUser } from "@clerk/clerk-react";
+
+function getResolutionHours(ticket) {
+  if (!ticket?.createdAt || !ticket?.resolvedAt) return null;
+  const ms =
+    new Date(ticket.resolvedAt).getTime() - new Date(ticket.createdAt).getTime();
+  return Math.max(Math.floor(ms / 3600000), 0);
+}
 
 export default function TicketCard({ ticket, onClick }) {
+  const { user } = useUser();
+  const resolutionHours = getResolutionHours(ticket);
+
   return (
     <div
       onClick={onClick}
-      className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-xl transition-all cursor-pointer group"
+      className="group bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 
+                 border border-gray-300 rounded-3xl overflow-hidden 
+                 shadow-sm hover:shadow-xl hover:-translate-y-1 
+                 transition-all duration-300 cursor-pointer flex flex-col"
     >
-      <div className="flex justify-between items-start mb-4">
-        <h3 className="font-semibold text-lg text-gray-900 line-clamp-2 group-hover:text-blue-600 transition-colors">
-          {ticket.title}
-        </h3>
-        <StatusBadge status={ticket.status} />
+      {/* Card Header */}
+      <div className="p-6 pb-4 border-b border-gray-300 bg-gray-100/80">
+        <div className="flex justify-between items-start gap-3">
+          <div className="flex-1">
+            <h3 className="text-lg font-semibold text-gray-900 group-hover:text-[#006591] transition-colors line-clamp-2">
+              {ticket.title}
+            </h3>
+
+            <div className="mt-2 mb-2 h-[1px] bg-gray-300" />
+
+            <p className="text-gray-600 text-sm">
+              {ticket.category} • {ticket.priority}
+            </p>
+          </div>
+
+          <StatusBadge status={ticket.status} />
+        </div>
       </div>
 
-      <p className="text-gray-600 text-sm line-clamp-2 mb-4">{ticket.description}</p>
+      {/* Card Body */}
+      <div className="p-6 flex-1 space-y-5 text-sm bg-gray-50/70">
+        <p className="text-gray-600 line-clamp-3">
+          {ticket.description}
+        </p>
 
-      <div className="flex flex-wrap gap-4 text-sm text-gray-500">
-        <div className="flex items-center gap-1.5">
-          <User size={16} />
-          <span>{ticket.createdBy}</span>
-        </div>
+        <InfoRow
+          icon={<User className="w-5 h-5 text-gray-600" />}
+          label="CREATED BY"
+          value={
+            <UserName
+              clerkUserId={ticket.createdBy}
+              currentUserId={user?.id}
+            />
+          }
+        />
+
         {ticket.assignedTo && (
-          <div className="flex items-center gap-1.5">
-            <User size={16} className="text-amber-600" />
-            <span className="text-amber-600">Assigned: {ticket.assignedTo}</span>
-          </div>
+          <InfoRow
+            icon={<Wrench className="w-5 h-5 text-gray-600" />}
+            label="ASSIGNED TO"
+            value={
+              <UserName
+                clerkUserId={ticket.assignedTo}
+                currentUserId={user?.id}
+              />
+            }
+          />
         )}
-        <div className="flex items-center gap-1.5">
-          <Calendar size={16} />
-          <span>{ticket.createdAt ? format(new Date(ticket.createdAt), "MMM dd") : "—"}</span>
+
+        <InfoRow
+          icon={<Calendar className="w-5 h-5 text-gray-600" />}
+          label="CREATED"
+          value={
+            ticket.createdAt
+              ? format(new Date(ticket.createdAt), "MMM dd, yyyy • hh:mm a")
+              : "—"
+          }
+        />
+
+        {resolutionHours !== null && (
+          <InfoRow
+            icon={<TimerReset className="w-5 h-5 text-gray-600" />}
+            label="RESOLVED IN"
+            value={`${resolutionHours} hours`}
+          />
+        )}
+
+        {/* 🔥 Highlighted Section */}
+        <div className="pt-2 flex gap-4">
+          {/* Comments */}
+          <div className="flex items-center gap-2 px-4 py-2 rounded-2xl 
+                          bg-blue-100 text-blue-700 text-xs font-semibold 
+                          hover:bg-blue-200 transition">
+            <MessageSquare size={16} />
+            {ticket.comments?.length || 0} comments
+          </div>
+
+          {/* Attachments */}
+          <div className="flex items-center gap-2 px-4 py-2 rounded-2xl 
+                          bg-purple-100 text-purple-700 text-xs font-semibold 
+                          hover:bg-purple-200 transition">
+            <Paperclip size={16} />
+            {ticket.attachments?.length || 0} attachments
+          </div>
         </div>
       </div>
+    </div>
+  );
+}
 
-      <div className="mt-4 flex gap-6 text-xs text-gray-500">
-        {ticket.comments?.length > 0 && (
-          <div className="flex items-center gap-1">
-            <MessageSquare size={16} />
-            {ticket.comments.length} comments
-          </div>
-        )}
-        {ticket.attachments?.length > 0 && (
-          <div className="flex items-center gap-1">
-            <Paperclip size={16} />
-            {ticket.attachments.length} attachments
-          </div>
-        )}
+/* reusable row */
+function InfoRow({ icon, label, value }) {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="w-10 h-10 rounded-2xl bg-white border border-gray-200 shadow-sm flex items-center justify-center">
+        {icon}
+      </div>
+
+      <div>
+        <p className="text-gray-500 text-xs font-semibold tracking-wider">
+          {label}
+        </p>
+        <p className="font-medium text-gray-900">{value}</p>
       </div>
     </div>
   );

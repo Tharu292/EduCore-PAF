@@ -1,199 +1,259 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Users, ShieldCheck, User, TrendingUp } from 'lucide-react';
-import API from "../api/axios"; 
-import useAuthToken from "../hooks/useAuthToken";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useUser } from "@clerk/clerk-react";
+import {
+  Building2,
+  CalendarCheck,
+  Wrench,
+  Bell,
+  MapPin,
+  Users,
+  Clock3,
+} from "lucide-react";
 
-export default function AdminPanel() {
-  // Clerk Token එක Axios වලට සම්බන්ධ කිරීම
-  useAuthToken();
+import AppLayout from "../components/AppLayout";
+import Toast from "../components/Toast";
+import TicketCard from "../components/TicketCard";
 
-  const [users, setUsers] = useState([]);
+import { getResources } from "../api/resourceApi";
+import { getMyBookings } from "../api/bookingApi";
+import { getUserTickets } from "../services/ticketService";
+import API from "../api/axios";
+
+export default function Dashboard() {
+  const navigate = useNavigate();
+  const { user, isLoaded } = useUser();
+
+  const [resources, setResources] = useState([]);
+  const [bookings, setBookings] = useState([]);
+  const [tickets, setTickets] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // 1. Backend එකෙන් සැබෑ දත්ත ලබා ගැනීම
-  useEffect(() => {
-    API.get("/admin/users")
-      .then((res) => {
-        setUsers(res.data);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error("Error fetching users:", err);
-        setLoading(false);
-      });
-  }, []);
-
-  // 2. Role එක Update කිරීමේ Function එක
-  const handleRoleChange = (userId, newRole) => {
-    API.put(`/admin/role/${userId}`, [newRole])
-      .then(() => {
-        // UI එක ක්ෂණිකව Update කිරීම
-        setUsers((prev) =>
-          prev.map((u) => (u.id === userId ? { ...u, roles: [newRole] } : u))
-        );
-        alert("Role updated successfully!");
-      })
-      .catch((err) => {
-        console.error("Role update failed:", err);
-        alert("Failed to update role.");
-      });
+  const showToast = (message, type = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
   };
 
-  // 3. Stats කාඩ්පත් සඳහා ගණනය කිරීම්
-  const totalUsers = users.length;
-  const admins = users.filter((u) => u.roles?.includes("ADMIN")).length;
-  const standardUsers = totalUsers - admins;
+  useEffect(() => {
+    const loadDashboard = async () => {
+      if (!isLoaded || !user?.id) return;
 
-  if (loading) {
-    return <div className="min-h-screen flex justify-center items-center">Loading Admin Panel...</div>;
-  }
+      try {
+        setLoading(true);
+        const [resourcesRes, bookingsRes, ticketsRes, notificationsRes] =
+          await Promise.all([
+            getResources(),
+            getMyBookings(),
+            getUserTickets(user.id),
+            API.get("/notifications"),
+          ]);
+
+        setResources(Array.isArray(resourcesRes.data) ? resourcesRes.data : []);
+        setBookings(Array.isArray(bookingsRes.data) ? bookingsRes.data : []);
+        setTickets(Array.isArray(ticketsRes.data) ? ticketsRes.data : []);
+        setNotifications(
+          Array.isArray(notificationsRes.data) ? notificationsRes.data : []
+        );
+      } catch (err) {
+        showToast("Failed to load dashboard data", "error");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDashboard();
+  }, [isLoaded, user?.id]);
+
+  const stats = useMemo(() => {
+    return {
+      activeResources: resources.filter((r) => r.status === "ACTIVE").length,
+      pendingBookings: bookings.filter((b) => b.status === "PENDING").length,
+      openTickets: tickets.filter(
+        (t) => t.status === "OPEN" || t.status === "IN_PROGRESS"
+      ).length,
+      unreadNotifications: notifications.filter((n) => !n.read).length,
+    };
+  }, [resources, bookings, tickets, notifications]);
+
+  const featuredResources = useMemo(() => {
+    return resources.filter((r) => r.status === "ACTIVE").slice(0, 4);
+  }, [resources]);
+
+  const recentBookings = useMemo(() => {
+    return [...bookings]
+      .sort((a, b) =>
+        `${b.bookingDate || ""} ${b.startTime || ""}`.localeCompare(
+          `${a.bookingDate || ""} ${a.startTime || ""}`
+        )
+      )
+      .slice(0, 3);
+  }, [bookings]);
+
+  const recentTickets = useMemo(() => {
+    return [...tickets]
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt || 0).getTime() -
+          new Date(a.createdAt || 0).getTime()
+      )
+      .slice(0, 3);
+  }, [tickets]);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8 font-sans">
-      
-      {/* Header Section */}
-      <div className="mb-8">
-        <div className="flex items-center text-blue-600 mb-2">
-          <ShieldCheck className="w-5 h-5 mr-2" />
-          <span className="text-sm font-semibold tracking-wider uppercase">Admin Panel</span>
-        </div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">User & system management</h1>
-        <p className="text-gray-500">Manage user accounts, assign roles, and monitor recent system activity.</p>
-      </div>
+    <AppLayout>
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center mb-4">
-            <Users className="w-5 h-5 text-blue-500" />
-          </div>
-          <p className="text-sm text-gray-500 mb-1">Total users</p>
-          <p className="text-3xl font-bold text-gray-900">{totalUsers}</p>
-        </div>
-        
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center mb-4">
-            <ShieldCheck className="w-5 h-5 text-indigo-500" />
-          </div>
-          <p className="text-sm text-gray-500 mb-1">Admins</p>
-          <p className="text-3xl font-bold text-gray-900">{admins}</p>
+      <div className="space-y-8">
+        {/* Banner */}
+        <div className="bg-gradient-to-r from-[#006591] via-[#006591] to-[#e31836] rounded-2xl p-8 text-white">
+          <h1 className="text-2xl font-semibold">
+            Welcome back, {user?.firstName || user?.fullName || "User"}
+          </h1>
+          <p className="mt-2 text-white/90">
+            Manage campus facilities, bookings, and support tickets.
+          </p>
         </div>
 
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center mb-4">
-            <User className="w-5 h-5 text-emerald-500" />
-          </div>
-          <p className="text-sm text-gray-500 mb-1">Standard users</p>
-          <p className="text-3xl font-bold text-gray-900">{standardUsers}</p>
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+          <StatCard icon={<Building2 />} label="Active Resources" value={stats.activeResources} />
+          <StatCard icon={<CalendarCheck />} label="Pending Bookings" value={stats.pendingBookings} />
+          <StatCard icon={<Wrench />} label="Open Tickets" value={stats.openTickets} />
+          <StatCard icon={<Bell />} label="Unread Notifications" value={stats.unreadNotifications} />
         </div>
 
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center mb-4">
-            <TrendingUp className="w-5 h-5 text-orange-500" />
-          </div>
-          <p className="text-sm text-gray-500 mb-1">System Status</p>
-          <p className="text-xl font-bold text-green-600 mt-2">Online</p>
-        </div>
-      </div>
-
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Manage Users Table (Takes up 2 columns) */}
-        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100">
-          <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+        {/* Resources */}
+        <div className="bg-gray-50 rounded-3xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-lg font-bold text-gray-900">Manage users</h2>
-              <p className="text-sm text-gray-500">Assign or revoke admin privileges</p>
-            </div>
-            <div className="relative">
-              <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
-              <input 
-                type="text" 
-                placeholder="Search users..." 
-                className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-64"
-              />
-            </div>
-          </div>
-          
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
-                  <th className="px-6 py-4 font-semibold">User</th>
-                  <th className="px-6 py-4 font-semibold">Role</th>
-                  <th className="px-6 py-4 font-semibold text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {users.map((user) => {
-                  const currentRole = user.roles?.includes("ADMIN") ? "ADMIN" : "USER";
-                  const initial = user.name ? user.name.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase();
-
-                  return (
-                    <tr key={user.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 flex items-center">
-                        <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold mr-3 shrink-0">
-                          {initial}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-gray-900 text-sm">{user.name || "Unknown User"}</p>
-                          <p className="text-xs text-gray-500">{user.email}</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        {currentRole === 'ADMIN' ? (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-600 border border-blue-100">
-                            <ShieldCheck className="w-3 h-3 mr-1" /> ADMIN
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
-                            USER
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <select 
-                          value={currentRole}
-                          onChange={(e) => handleRoleChange(user.id, e.target.value)}
-                          className="bg-white border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 cursor-pointer"
-                        >
-                          <option value="ADMIN">ADMIN</option>
-                          <option value="USER">USER</option>
-                        </select>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* System Activity Feed (Takes up 1 column) */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <div className="flex items-center mb-6">
-            <TrendingUp className="w-5 h-5 text-blue-600 mr-2" />
-            <h2 className="text-lg font-bold text-gray-900">System Information</h2>
-          </div>
-          
-          <div className="relative border-l-2 border-gray-100 ml-3 space-y-8">
-            <div className="relative pl-6">
-              <div className="absolute -left-[9px] top-1.5 w-4 h-4 rounded-full bg-blue-500 border-4 border-white shadow-sm"></div>
-              <p className="text-sm text-gray-800">
-                <span className="font-semibold text-gray-900">Database connected</span> successfully.
+              <h2 className="text-2xl font-semibold text-gray-900">
+                Available Resources
+              </h2>
+              <p className="text-gray-500 mt-1">
+                Quickly access facilities and equipment
               </p>
             </div>
-            <div className="relative pl-6">
-              <div className="absolute -left-[9px] top-1.5 w-4 h-4 rounded-full bg-green-500 border-4 border-white shadow-sm"></div>
-              <p className="text-sm text-gray-800">
-                <span className="font-semibold text-gray-900">Real-time sync</span> is active. Users are fetched directly from MongoDB.
-              </p>
-            </div>
+
+            <button
+              onClick={() => navigate("/resources")}
+              className="px-5 py-2.5 rounded-2xl text-sm font-medium text-[#006591] hover:bg-[#006591]/5 transition"
+            >
+              View All
+            </button>
           </div>
+
+          {loading ? (
+            <div className="py-12 text-center text-gray-500">
+              Loading resources...
+            </div>
+          ) : featuredResources.length === 0 ? (
+            <div className="py-12 text-center text-gray-500">
+              No active resources available.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+              {featuredResources.map((resource) => (
+                <div
+                  key={resource.id || resource._id}
+                  onClick={() => navigate("/resources")}
+                  className="group bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 
+                             border border-gray-300 rounded-3xl p-6 cursor-pointer 
+                             shadow-sm hover:shadow-xl hover:-translate-y-1 
+                             transition-all duration-300"
+                >
+                  {/* Title */}
+                  <h3 className="text-lg font-semibold text-gray-900 group-hover:text-[#006591]">
+                    {resource.name}
+                  </h3>
+
+                  {/* ✅ NEW DIVIDER LINE */}
+                  <div className="mt-3 mb-4 h-[1px] bg-gray-300" />
+
+                  {/* Content */}
+                  <div className="space-y-3 text-sm text-gray-600">
+                    <div className="flex items-center gap-3">
+                      <Building2 className="w-4 h-4" />
+                      {resource.type}
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <MapPin className="w-4 h-4" />
+                      {resource.location}
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <Users className="w-4 h-4" />
+                      Capacity: {resource.capacity}
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <Clock3 className="w-4 h-4" />
+                      {resource.availability || "Not specified"}
+                    </div>
+                  </div>
+
+                  <div className="mt-6">
+                    <span className="inline-flex px-4 py-1.5 rounded-2xl text-xs font-semibold bg-emerald-100 text-emerald-700">
+                      {resource.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
+        {/* Activity */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <Section title="Recent Bookings" onView={() => navigate("/my-bookings")}>
+            {recentBookings.map((b) => (
+              <div key={b.id || b._id} className="p-4 border rounded-2xl">
+                {b.resourceName}
+              </div>
+            ))}
+          </Section>
+
+          <Section title="Recent Tickets" onView={() => navigate("/my-tickets")}>
+            {recentTickets.map((t) => (
+              <TicketCard key={t.id || t._id} ticket={t} />
+            ))}
+          </Section>
+        </div>
       </div>
+    </AppLayout>
+  );
+}
+
+/* Components */
+
+function StatCard({ icon, label, value }) {
+  return (
+    <div className="bg-white rounded-3xl border p-5">
+      <div className="mb-3 text-[#006591]">{icon}</div>
+      <p className="text-sm text-gray-500">{label}</p>
+      <p className="text-xl font-semibold">{value}</p>
+    </div>
+  );
+}
+
+function Section({ title, children, onView }) {
+  return (
+    <div className="bg-white rounded-3xl border p-6">
+      <div className="flex justify-between mb-4">
+        <h2 className="font-semibold text-lg">{title}</h2>
+        <button onClick={onView} className="text-sm text-[#006591]">
+          View all
+        </button>
+      </div>
+      <div className="space-y-3">{children}</div>
     </div>
   );
 }

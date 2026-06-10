@@ -1,28 +1,46 @@
 import API from "../api/axios";
 
-// Tickets
 export const createTicket = (data) => API.post("/tickets", data);
 export const getAllTickets = () => API.get("/tickets");
 export const getTicketById = (id) => API.get(`/tickets/${id}`);
-export const getMyTickets = (username) => API.get(`/tickets/user/${username}`);
-export const getTechnicianTickets = (name) => API.get(`/tickets/technician/${name}`);
 
-// Status & Assignment
-export const updateStatus = (id, status) =>
-  API.put(`/tickets/${id}/status?status=${status}`);
+export const getUserTickets = (clerkUserId) =>
+  API.get(`/tickets/user/${clerkUserId}`);
 
-export const assignTechnician = (id, technician, admin = "admin") =>
-  API.put(`/tickets/${id}/assign`, null, { params: { technician, admin } });
+export const getTechnicianTickets = (clerkUserId) =>
+  API.get(`/tickets/technician/${clerkUserId}`);
 
-// Comments
-export const addComment = (id, data) => API.post(`/tickets/${id}/comments`, data);
-export const updateComment = (ticketId, commentId, data) =>
-  API.put(`/tickets/${ticketId}/comments/${commentId}`, data);
-export const deleteComment = (ticketId, commentId, user) =>
-  API.delete(`/tickets/${ticketId}/comments/${commentId}`, { params: { user } });
+export const updateStatus = (id, status, reason = "", resolutionNotes = "") =>
+  API.put(`/tickets/${id}/status`, null, {
+    params: { status, reason, resolutionNotes },
+  });
 
-// Attachments
-export const uploadImages = (id, formData) =>
-  API.post(`/tickets/${id}/upload`, formData, {
+export const assignTechnician = (ticketId, technicianClerkId) =>
+  API.post(`/tickets/${ticketId}/assign`, null, {
+    params: { technicianClerkId },
+  });
+
+  export const rejectTicket = (id, reason) =>
+  API.put(`/tickets/${id}/status`, null, {
+    params: {
+      status: "REJECTED",
+      reason,
+    },
+  });
+
+export const addComment = (ticketId, commentData) =>
+  API.post(`/tickets/${ticketId}/comments`, commentData);
+
+export const updateComment = (ticketId, commentId, updatedData) =>
+  API.put(`/tickets/${ticketId}/comments/${commentId}`, updatedData);
+
+export const deleteComment = (ticketId, commentId) =>
+  API.delete(`/tickets/${ticketId}/comments/${commentId}`);
+
+export const uploadImages = (ticketId, formData) =>
+  API.post(`/tickets/${ticketId}/upload`, formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
+
+export const removeAttachment = (ticketId, filename) =>
+  API.delete(`/tickets/${ticketId}/attachments/${encodeURIComponent(filename)}`);

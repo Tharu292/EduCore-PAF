@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Upload, Image } from "lucide-react";
+import { Upload } from "lucide-react";
 import { uploadImages } from "../services/ticketService";
 
-export default function UploadImages({ ticketId, onUploadSuccess }) {
+export default function UploadImages({ ticketId, onUploadSuccess, showToast }) {
   const [uploading, setUploading] = useState(false);
 
   const handleUpload = async (e) => {
@@ -12,25 +12,37 @@ export default function UploadImages({ ticketId, onUploadSuccess }) {
     setUploading(true);
     const formData = new FormData();
     Array.from(files).forEach((file) => formData.append("files", file));
-    formData.append("user", "user1"); // Change dynamically later
 
     try {
       await uploadImages(ticketId, formData);
-      alert("Images uploaded successfully!");
+      showToast?.("Images uploaded successfully", "success");
       onUploadSuccess?.();
+      e.target.value = "";
     } catch (err) {
       console.error(err);
-      alert("Upload failed");
+      showToast?.(err.response?.data?.error || "Upload failed. Max 3 images allowed.", "error");
     } finally {
       setUploading(false);
     }
   };
 
   return (
-    <label className="cursor-pointer inline-flex items-center gap-2 bg-white border border-dashed border-gray-400 hover:border-blue-500 px-6 py-3 rounded-2xl transition">
-      <Upload size={20} />
-      <span className="font-medium">{uploading ? "Uploading..." : "Upload Images (max 3)"}</span>
-      <input type="file" multiple accept="image/*" onChange={handleUpload} className="hidden" />
+    <label className="cursor-pointer inline-flex items-center gap-3 bg-white border-2 border-dashed border-gray-300 hover:border-blue-500 px-8 py-4 rounded-2xl transition-all hover:shadow">
+      <Upload size={22} className="text-blue-600" />
+      <div>
+        <span className="font-semibold text-gray-900 block">
+          {uploading ? "Uploading..." : "Upload Evidence Images"}
+        </span>
+        <span className="text-xs text-gray-500">Max 3 images • JPG, PNG</span>
+      </div>
+      <input
+        type="file"
+        multiple
+        accept="image/*"
+        onChange={handleUpload}
+        className="hidden"
+        disabled={uploading}
+      />
     </label>
   );
 }
